@@ -605,38 +605,6 @@ bool IOLoginData::loadPlayer(Player* player, DBResult_ptr result)
 		}
 	}
 
-	// load depot locker items
-	{
-		ItemMap itemMap;
-		[[maybe_unused]] ItemMapGuard itemMapGuard{itemMap};
-
-		if ((result = db.storeQuery(fmt::format(
-		         "SELECT `pid`, `sid`, `itemtype`, `count`, `attributes` FROM `player_depotlockeritems` WHERE `player_id` = {:d} ORDER BY `sid` DESC",
-		         player->getGUID())))) {
-			loadItems(itemMap, result);
-
-			for (ItemMap::reverse_iterator it = itemMap.rbegin(), end = itemMap.rend(); it != end; ++it) {
-				auto item = std::move(it->second.first);
-				if (!item || item->getID() == ITEM_INBOX || item->getID() == ITEM_MARKET || item->getID() == ITEM_SUPPLY_STASH) {
-					continue;
-				}
-
-				int32_t pid = it->second.second;
-				if (pid >= 0 && pid < 100) {
-					transferLoadedItem(player->getDepotLocker(pid), item);
-					continue;
-				}
-
-				ItemMap::const_iterator parentIt = itemMap.find(pid);
-				if (parentIt == itemMap.end() || !parentIt->second.first) {
-					continue;
-				}
-
-				Container* container = parentIt->second.first->getContainer();
-				transferLoadedItem(container, item);
-			}
-		}
-	}
 
 	// load depot items
 	{
@@ -1148,7 +1116,7 @@ bool IOLoginData::savePlayer(Player* player)
 		}
 	}
 
-	// save depot locker items
+	// save depot items
 	bool needsSave = false;
 
 	for (const auto& it : player->depotLockerMap) {
@@ -1161,56 +1129,32 @@ bool IOLoginData::savePlayer(Player* player)
 	if (needsSave) {
 		AutoStat statDepot("savePlayer", "items_depot");
 		if (!db.executeQuery(
-		        fmt::format("DELETE FROM `player_depotlockeritems` WHERE `player_id` = {:d}", player->getGUID()))) {
+		        fmt::format("DELETE FROM `player_depotitems` WHERE `player_id` = {:d}", player->getGUID()))) {
 			return false;
 		}
 
-		DBInsert lockerQuery(
-		    "INSERT INTO `player_depotlockeritems` (`player_id`, `pid`, `sid`, `itemtype`, `count`, `attributes`) VALUES ");
+		DBInsert depotQuery(
+		    "INSERT INTO `player_depotitems` (`player_id`, `pid`, `sid`, `itemtype`, `count`, `attributes`) VALUES ");
 		ItemBlockList itemList;
 
-		for (const auto& it : player->depotLockerMap) {
+		for (const auto& it : player->depotChests) {
 			for (const auto& item : it.second->getItemList()) {
-				if (item->getID() != ITEM_DEPOT && item->getID() != ITEM_INBOX && item->getID() != ITEM_MARKET && item->getID() != ITEM_SUPPLY_STASH) {
-					itemList.emplace_back(it.first, item.get());
-				}
-			}
-		}
-
-		if (!saveItems(player, itemList, lockerQuery, propWriteStream)) {
-			return false;
-		}
-
-		// save depot items
-		if (needsSave) {
-			if (!db.executeQuery(
-			        fmt::format("DELETE FROM `player_depotitems` WHERE `player_id` = {:d}", player->getGUID()))) {
-				return false;
-			}
-
-			DBInsert depotQuery(
-			    "INSERT INTO `player_depotitems` (`player_id`, `pid`, `sid`, `itemtype`, `count`, `attributes`) VALUES ");
-			itemList.clear();
-
-			for (const auto& it : player->depotChests) {
-				for (const auto& item : it.second->getItemList()) {
-					if (item->getID() >= ITEM_DEPOT_BOX_1 && item->getID() <= ITEM_DEPOT_BOX_17) {
-						if (Container* box = item->getContainer()) {
-							int32_t boxIndex = item->getID() - ITEM_DEPOT_BOX_1;
-							int32_t specialPid = -static_cast<int32_t>(it.first * 20 + boxIndex + 1);
-							for (const auto& subItem : box->getItemList()) {
-								itemList.emplace_back(specialPid, subItem.get());
-							}
+				if (item->getID() >= ITEM_DEPOT_BOX_1 && item->getID() <= ITEM_DEPOT_BOX_17) {
+					if (Container* box = item->getContainer()) {
+						int32_t boxIndex = item->getID() - ITEM_DEPOT_BOX_1;
+						int32_t specialPid = -static_cast<int32_t>(it.first * 20 + boxIndex + 1);
+						for (const auto& subItem : box->getItemList()) {
+							itemList.emplace_back(specialPid, subItem.get());
 						}
-						continue;
 					}
-					itemList.emplace_back(it.first, item.get());
+					continue;
 				}
+				itemList.emplace_back(it.first, item.get());
 			}
+		}
 
-			if (!saveItems(player, itemList, depotQuery, propWriteStream)) {
-				return false;
-			}
+		if (!saveItems(player, itemList, depotQuery, propWriteStream)) {
+			return false;
 		}
 	}
 

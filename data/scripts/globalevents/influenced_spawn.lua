@@ -180,7 +180,7 @@ function influencedSpawn.onThink(interval)
 
     return true
 end
-influencedSpawn:interval(4000)
+influencedSpawn:interval(CONFIG.spawnInterval * 4000)
 influencedSpawn:register()
 
 local influencedDamage = CreatureEvent("InfluencedDamage")
