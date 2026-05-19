@@ -49,6 +49,14 @@ public:
 
 	void setNeedAccess(bool b) { needAccess = b; }
 
+	int32_t getExhaustion() const { return exhaustion; }
+	void setExhaustion(int32_t val) { exhaustion = val; }
+
+	const std::string& getExhaustionMessage() const { return exhaustionMessage; }
+	void setExhaustionMessage(std::string_view msg) { exhaustionMessage = msg; }
+	MessageClasses getExhaustionMessageType() const { return exhaustionMessageType; }
+	void setExhaustionMessageType(MessageClasses type) { exhaustionMessageType = type; }
+
 private:
 	std::string_view getScriptEventName() const override { return "onSay"; }
 
@@ -57,6 +65,9 @@ private:
 	std::string separator = "\"";
 	bool needAccess = false;
 	AccountType_t requiredAccountType = ACCOUNT_TYPE_NORMAL;
+	int32_t exhaustion = -1;
+	std::string exhaustionMessage;
+	MessageClasses exhaustionMessageType = MESSAGE_STATUS_SMALL;
 };
 
 class TalkActions final : public BaseEvents

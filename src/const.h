@@ -6,6 +6,7 @@
 
 inline constexpr int32_t NETWORKMESSAGE_MAXSIZE = 65500;
 inline constexpr uint8_t TILE_MAX_ITEMS = 10;
+inline constexpr int32_t TALK_ACTION_EXHAUST_MS = 2000;
 
 enum MagicEffectClasses : uint16_t
 {
@@ -652,6 +653,7 @@ enum PlayerFlags : uint64_t
 
 enum Exhaust_t : uint32_t
 {
+	EXHAUST_TALKACTION = 14,
 	EXHAUST_USEITEM = 20,
 	EXHAUST_OPENCONTAINER = 21,
 	EXHAUST_POTION = 30,

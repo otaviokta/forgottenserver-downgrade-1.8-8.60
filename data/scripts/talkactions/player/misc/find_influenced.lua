@@ -1,5 +1,4 @@
 local findInfluenced = TalkAction("/findinfluenced", "!findinfluenced")
-local cooldowns = {}
 
 function findInfluenced.onSay(player, words, param)
     -- Retrieve and merge both influenced and fiendish lists
@@ -55,16 +54,6 @@ function findInfluenced.onSay(player, words, param)
         end
     end
 
-    local playerId = player:getId()
-    local cooldown = cooldowns[playerId]
-    if cooldown and cooldown > os.time() then
-        local remaining = cooldown - os.time()
-        player:sendCancelMessage(string.format("You must wait %d second%s before using this again.", remaining, remaining > 1 and "s" or ""))
-        return false
-    end
-
-    cooldowns[playerId] = os.time() + 6
-
     local monsterName = closest:getName()
 
     player:sendTextMessage(MESSAGE_INFO_DESCR,
@@ -74,4 +63,6 @@ function findInfluenced.onSay(player, words, param)
     player:getPosition():sendMagicEffect(CONST_ME_MAGIC_RED)
     return false
 end
+findInfluenced:exhaustion(6000)
+findInfluenced:exhaustionMessage("Please wait {time}s before using the command findIncluenced again.", MESSAGE_STATUS_SMALL)
 findInfluenced:register()

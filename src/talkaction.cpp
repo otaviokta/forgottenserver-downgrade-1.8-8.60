@@ -5,6 +5,7 @@
 
 #include "talkaction.h"
 
+#include "condition.h"
 #include "player.h"
 #include "pugicast.h"
 #include "logger.h"
@@ -75,6 +76,39 @@ TalkActionResult TalkActions::playerSaySpell(Player* player, SpeakClasses type, 
 
 		if (player->getAccountType() < it->second.getRequiredAccountType()) {
 			return TalkActionResult::CONTINUE;
+		}
+
+		int32_t exhaustTime = it->second.getExhaustion();
+		if (exhaustTime == -1) {
+			exhaustTime = TALK_ACTION_EXHAUST_MS;
+		}
+
+		if (exhaustTime > 0) {
+			if (player->hasCondition(CONDITION_EXHAUST_WEAPON, EXHAUST_TALKACTION)) {
+				Condition* condition = player->getCondition(CONDITION_EXHAUST_WEAPON, CONDITIONID_DEFAULT, EXHAUST_TALKACTION);
+				if (!it->second.getExhaustionMessage().empty()) {
+					std::string msg = it->second.getExhaustionMessage();
+					size_t pos = msg.find("{time}");
+					if (pos != std::string::npos) {
+						double sec = condition ? (condition->getTicks() / 1000.0) : 0.0;
+						msg.replace(pos, 6, fmt::format("{:.1f}", sec));
+					}
+					player->sendTextMessage(it->second.getExhaustionMessageType(), msg);
+				} else {
+					if (condition) {
+						player->sendTextMessage(MESSAGE_STATUS_SMALL, fmt::format("Please wait {:.1f}s before using this command again.", condition->getTicks() / 1000.0));
+					} else {
+						player->sendTextMessage(MESSAGE_STATUS_SMALL, "Please wait a few seconds before using this command again.");
+					}
+				}
+				return TalkActionResult::BREAK;
+			}
+
+			if (!player->hasFlag(PlayerFlag_HasNoExhaustion)) {
+				if (auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_EXHAUST_WEAPON, exhaustTime, 0, false, EXHAUST_TALKACTION)) {
+					player->addCondition(std::move(condition));
+				}
+			}
 		}
 
 		if (it->second.executeSay(player, words, param, type)) {

@@ -126,6 +126,49 @@ int luaTalkactionAccountType(lua_State* L)
 	return 1;
 }
 
+int luaTalkactionExhaustion(lua_State* L)
+{
+	// get: talkAction:exhaustion() set: talkAction:exhaustion(timeMs or bool)
+	TalkAction* talk = getUserdata<TalkAction>(L, 1);
+	if (talk) {
+		if (lua_gettop(L) == 1) {
+			lua_pushinteger(L, talk->getExhaustion());
+		} else {
+			if (lua_isboolean(L, 2)) {
+				talk->setExhaustion(getBoolean(L, 2) ? -1 : 0);
+			} else {
+				talk->setExhaustion(getInteger<int32_t>(L, 2));
+			}
+			pushBoolean(L, true);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaTalkactionExhaustionMessage(lua_State* L)
+{
+	// get: talkAction:exhaustionMessage() set: talkAction:exhaustionMessage(msg, [msgType = MESSAGE_STATUS_SMALL])
+	TalkAction* talk = getUserdata<TalkAction>(L, 1);
+	if (talk) {
+		if (lua_gettop(L) == 1) {
+			pushString(L, talk->getExhaustionMessage());
+		} else {
+			talk->setExhaustionMessage(getString(L, 2));
+			if (lua_gettop(L) >= 3) {
+				talk->setExhaustionMessageType(getInteger<MessageClasses>(L, 3));
+			} else {
+				talk->setExhaustionMessageType(MESSAGE_STATUS_SMALL);
+			}
+			pushBoolean(L, true);
+		}
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaDeleteTalkAction(lua_State* L)
 {
 	return deleteOwnedUserdata(L);
@@ -146,4 +189,6 @@ void LuaScriptInterface::registerTalkActions()
 	registerMethod("TalkAction", "separator", luaTalkactionSeparator);
 	registerMethod("TalkAction", "access", luaTalkactionAccess);
 	registerMethod("TalkAction", "accountType", luaTalkactionAccountType);
+	registerMethod("TalkAction", "exhaustion", luaTalkactionExhaustion);
+	registerMethod("TalkAction", "exhaustionMessage", luaTalkactionExhaustionMessage);
 }
