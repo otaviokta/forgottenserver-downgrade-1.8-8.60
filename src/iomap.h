@@ -102,7 +102,7 @@ public:
         }
 
         // Load traditional spawn file
-        map->spawns.loadFromXml(map->spawnfile.string());
+        bool spawnsLoaded = map->spawns.loadFromXml(map->spawnfile.string());
 
         // Also try Canary/Crystal-style monster+npc files
         std::string mapName(getString(ConfigManager::MAP_NAME));
@@ -110,10 +110,18 @@ public:
         if (worldPath.empty()) {
             worldPath = "data/world";
         }
-        map->spawns.loadFromMonsterNpcXml((worldPath / (mapName + "-monster.xml")).string());
-        map->spawns.loadFromMonsterNpcXml((worldPath / (mapName + "-npc.xml")).string());
 
-        return map->spawns.isStarted() || !map->spawns.getSpawnList().empty() || map->spawns.getNpcCount() > 0;
+        auto monsterPath = worldPath / (mapName + "-monster.xml");
+        if (std::filesystem::exists(monsterPath)) {
+            spawnsLoaded |= map->spawns.loadFromMonsterNpcXml(monsterPath.string());
+        }
+
+        auto npcPath = worldPath / (mapName + "-npc.xml");
+        if (std::filesystem::exists(npcPath)) {
+            spawnsLoaded |= map->spawns.loadFromMonsterNpcXml(npcPath.string());
+        }
+
+        return spawnsLoaded;
     }
 
     /* Load the houses (not house tile-data)
