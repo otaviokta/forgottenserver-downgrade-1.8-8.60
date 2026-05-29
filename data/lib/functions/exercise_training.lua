@@ -1,3 +1,7 @@
+if staminaEvents == nil then
+    staminaEvents = {}
+end
+
 ExerciseWeaponsTable = {
 	[28540] = { skill = SKILL_SWORD },
 	[28552] = { skill = SKILL_SWORD },

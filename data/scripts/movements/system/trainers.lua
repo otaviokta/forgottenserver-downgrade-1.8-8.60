@@ -1,11 +1,11 @@
 local config = {
 	actionId = 1957,
 
-	first_room_pos = {x = 1053, y = 1324, z = 6},	-- posição da primeira sala (linha 1 coluna 1)
-	distX = 18,	-- distância em X entre cada sala
-	distY = 14,	-- distância em Y entre cada sala
-	rX = 5,	 	-- número de colunas
-	rY = 2		-- número de linhas
+	first_room_pos = {x = 1053, y = 1324, z = 6},
+	distX = 18,
+	distY = 14,
+	rX = 5,
+	rY = 2
 }
 
 local function isBusyable(position)
@@ -69,5 +69,4 @@ end
 
 moveEvent:type("stepin")
 moveEvent:aid(config.actionId)
-
 moveEvent:register()

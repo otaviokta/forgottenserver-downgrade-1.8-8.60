@@ -74540,7 +74540,7 @@
 	</item>
 	<item id="50193" name="jade conical hat">
 		<attribute key="armor" value="5" />
-		<attribute key="mantra" value="500" />
+		<attribute key="mantra" value="6" />
 		<attribute key="skillfist" value="2" />
 		<attribute key="absorbpercentice" value="4" />
 		<attribute key="weight" value="2100" />

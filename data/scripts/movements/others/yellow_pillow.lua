@@ -8,5 +8,5 @@ function yellowPillow.onStepIn(player, item, position, fromPosition)
 	return true
 end
 
-yellowPillow:id(8072)
+yellowPillow:id(2397)
 yellowPillow:register()

@@ -11,4 +11,5 @@ function moveevent.onAddItem(moveitem, tileitem, position)
 end
 
 moveevent:id(306) -- empty flower pot
+moveevent:tileItem(true)
 moveevent:register()

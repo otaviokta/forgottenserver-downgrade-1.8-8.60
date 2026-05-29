@@ -1,6 +1,4 @@
-local statues = {
-	16198, 16199, 16200, 16201, 16202
-}
+local statues = { 16198, 16199, 16200, 16201, 16202 }
 
 local skillOffline = Action()
 

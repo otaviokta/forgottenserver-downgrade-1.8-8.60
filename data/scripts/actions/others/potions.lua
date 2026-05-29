@@ -29,7 +29,7 @@ local potionData = {
 	},
 	[7440] = {
 		condition = mastermind,
-		vocations = {1, 2, 5, 6},
+		--vocations = {1, 2, 5, 6},
 		effect = CONST_ME_MAGIC_BLUE,
 		description = "Only sorcerers and druids may drink this potion.",
 		text = "You feel smarter."
