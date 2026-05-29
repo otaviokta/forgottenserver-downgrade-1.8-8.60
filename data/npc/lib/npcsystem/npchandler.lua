@@ -101,17 +101,57 @@ if NpcHandler == nil then
         }
     }
 
+    -- Helper to retrieve isolated state for the currently executing NPC instance.
+    function NpcHandler:getNpcState()
+        local npcId = (getNpcCid and getNpcCid()) or 0
+        if not self.npcStates then
+            self.npcStates = {}
+        end
+        if not self.npcStates[npcId] then
+            self.npcStates[npcId] = {
+                focuses = {},
+                talkStart = {},
+                topic = {},
+                talkDelay = {},
+                eventSay = {},
+                eventDelayedSay = {}
+            }
+        end
+        return self.npcStates[npcId]
+    end
+
     -- Creates a new NpcHandler with an empty callbackFunction stack.
     function NpcHandler:new(keywordHandler)
         local obj = {}
         obj.callbackFunctions = {}
         obj.modules = {}
-        obj.eventSay = {}
-        obj.eventDelayedSay = {}
-        obj.topic = {}
-        obj.focuses = {}
-        obj.talkStart = {}
-        obj.talkDelay = {}
+
+        -- Setup redirect metatables to support per-NPC-instance states
+        obj.eventSay = setmetatable({}, {
+            __index = function(t, k) return obj:getNpcState().eventSay[k] end,
+            __newindex = function(t, k, v) obj:getNpcState().eventSay[k] = v end
+        })
+        obj.eventDelayedSay = setmetatable({}, {
+            __index = function(t, k) return obj:getNpcState().eventDelayedSay[k] end,
+            __newindex = function(t, k, v) obj:getNpcState().eventDelayedSay[k] = v end
+        })
+        obj.topic = setmetatable({}, {
+            __index = function(t, k) return obj:getNpcState().topic[k] end,
+            __newindex = function(t, k, v) obj:getNpcState().topic[k] = v end
+        })
+        obj.focuses = setmetatable({}, {
+            __index = function(t, k) return obj:getNpcState().focuses[k] end,
+            __newindex = function(t, k, v) obj:getNpcState().focuses[k] = v end
+        })
+        obj.talkStart = setmetatable({}, {
+            __index = function(t, k) return obj:getNpcState().talkStart[k] end,
+            __newindex = function(t, k, v) obj:getNpcState().talkStart[k] = v end
+        })
+        obj.talkDelay = setmetatable({}, {
+            __index = function(t, k) return obj:getNpcState().talkDelay[k] end,
+            __newindex = function(t, k, v) obj:getNpcState().talkDelay[k] = v end
+        })
+
         obj.keywordHandler = keywordHandler
         obj.messages = {}
         obj.shopItems = {}
@@ -136,8 +176,9 @@ if NpcHandler == nil then
     function NpcHandler:addFocus(newFocus)
         if self:isFocused(newFocus) then return end
 
-        self.focuses[#self.focuses + 1] = newFocus
-        self.topic[newFocus] = 0
+        local focuses = self:getNpcState().focuses
+        focuses[#focuses + 1] = newFocus
+        self:getNpcState().topic[newFocus] = 0
         local callback = self:getCallback(CALLBACK_ONADDFOCUS)
         if callback == nil or callback(newFocus) then
             self:processModuleCallback(CALLBACK_ONADDFOCUS, newFocus)
@@ -147,7 +188,7 @@ if NpcHandler == nil then
 
     -- Function used to verify if npc is focused to certain player
     function NpcHandler:isFocused(focus)
-        for k, v in pairs(self.focuses) do
+        for k, v in pairs(self:getNpcState().focuses) do
             if v == focus then return true end
         end
         return false
@@ -167,7 +208,7 @@ if NpcHandler == nil then
             end
         end
 
-        for pos, focus in pairs(self.focuses) do
+        for pos, focus in pairs(self:getNpcState().focuses) do
             if focus then
                 setNativeFocus(focus)
                 return
@@ -191,20 +232,21 @@ if NpcHandler == nil then
             shop_premium[focus] = nil
         end
 
-        if self.eventDelayedSay[focus] then
-            self:cancelNPCTalk(self.eventDelayedSay[focus])
+        if self:getNpcState().eventDelayedSay[focus] then
+            self:cancelNPCTalk(self:getNpcState().eventDelayedSay[focus])
         end
 
         if not self:isFocused(focus) then return end
 
         local pos = nil
-        for k, v in pairs(self.focuses) do if v == focus then pos = k end end
-        self.focuses[pos] = nil
+        local focuses = self:getNpcState().focuses
+        for k, v in pairs(focuses) do if v == focus then pos = k end end
+        focuses[pos] = nil
 
-        self.eventSay[focus] = nil
-        self.eventDelayedSay[focus] = nil
-        self.talkStart[focus] = nil
-        self.topic[focus] = nil
+        self:getNpcState().eventSay[focus] = nil
+        self:getNpcState().eventDelayedSay[focus] = nil
+        self:getNpcState().talkStart[focus] = nil
+        self:getNpcState().topic[focus] = nil
 
         local callback = self:getCallback(CALLBACK_ONRELEASEFOCUS)
         if callback == nil or callback(focus) then
@@ -486,18 +528,19 @@ if NpcHandler == nil then
         local callback = self:getCallback(CALLBACK_ONTHINK)
         if callback == nil or callback() then
             if NPCHANDLER_TALKDELAY == TALKDELAY_ONTHINK then
-                for cid, talkDelay in pairs(self.talkDelay) do
+                local talkDelayTable = self:getNpcState().talkDelay
+                for cid, talkDelay in pairs(talkDelayTable) do
                     if talkDelay.time and talkDelay.message and os.time() >=
                         talkDelay.time then
                         selfSay(talkDelay.message, cid,
                                 talkDelay.publicize and true or false)
-                        self.talkDelay[cid] = nil
+                        talkDelayTable[cid] = nil
                     end
                 end
             end
 
             if self:processModuleCallback(CALLBACK_ONTHINK) then
-                for pos, focus in pairs(self.focuses) do
+                for pos, focus in pairs(self:getNpcState().focuses) do
                     if focus then
                         local player = Player(focus)
                         if not player then
@@ -505,8 +548,8 @@ if NpcHandler == nil then
                             self:releaseFocus(focus)
                         elseif not self:isInRange(focus) then
                             self:onWalkAway(focus)
-                        elseif self.talkStart[focus] and
-                            (os.time() - self.talkStart[focus]) > self.idleTime then
+                        elseif self:getNpcState().talkStart[focus] and
+                            (os.time() - self:getNpcState().talkStart[focus]) > self.idleTime then
                             self:unGreet(focus)
                         else
                             self:updateFocus()
@@ -583,24 +626,25 @@ if NpcHandler == nil then
         end
     end
 
+    -- Helper to stop scheduled speech events.
     function NpcHandler:cancelNPCTalk(events)
         for aux = 1, #events do stopEvent(events[aux].event) end
         events = nil
     end
 
     function NpcHandler:doNPCTalkALot(msgs, interval, pcid)
-        if self.eventDelayedSay[pcid] then
-            self:cancelNPCTalk(self.eventDelayedSay[pcid])
+        if self:getNpcState().eventDelayedSay[pcid] then
+            self:cancelNPCTalk(self:getNpcState().eventDelayedSay[pcid])
         end
 
-        self.eventDelayedSay[pcid] = {}
+        self:getNpcState().eventDelayedSay[pcid] = {}
         local ret = {}
         for aux = 1, #msgs do
-            self.eventDelayedSay[pcid][aux] = {}
+            self:getNpcState().eventDelayedSay[pcid][aux] = {}
             doCreatureSayWithDelay(getNpcCid(), msgs[aux], TALKTYPE_PRIVATE_NP,
                                    ((aux - 1) * (interval or 4000)) + 700,
-                                   self.eventDelayedSay[pcid][aux], pcid)
-            ret[#ret + 1] = self.eventDelayedSay[pcid][aux]
+                                   self:getNpcState().eventDelayedSay[pcid][aux], pcid)
+            ret[#ret + 1] = self:getNpcState().eventDelayedSay[pcid][aux]
         end
         return (ret)
     end
@@ -613,8 +657,8 @@ if NpcHandler == nil then
             return self:doNPCTalkALot(message, delay or 6000, focus)
         end
 
-        if self.eventDelayedSay[focus] then
-            self:cancelNPCTalk(self.eventDelayedSay[focus])
+        if self:getNpcState().eventDelayedSay[focus] then
+            self:cancelNPCTalk(self:getNpcState().eventDelayedSay[focus])
         end
 
         local shallDelay = not shallDelay and true or shallDelay
@@ -623,8 +667,8 @@ if NpcHandler == nil then
             return
         end
 
-        stopEvent(self.eventSay[focus])
-        self.eventSay[focus] = addEvent(function(npcId, message, focusId)
+        stopEvent(self:getNpcState().eventSay[focus])
+        self:getNpcState().eventSay[focus] = addEvent(function(npcId, message, focusId)
             local npc = Npc(npcId)
             if npc == nil then return end
             local player = Player(focusId)

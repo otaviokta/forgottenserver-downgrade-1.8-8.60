@@ -18,7 +18,7 @@ function houseGuest.onSay(player, words, param)
 
     if houseType == HOUSE_TYPE_NORMAL then
         -- Normal house: check if player is the owner
-        if house:getOwner() == player:getGuid() then
+        if house:getOwnerGuid() == player:getGuid() then
             canUse = true
         end
     elseif houseType == HOUSE_TYPE_GUILDHALL then

@@ -97,6 +97,17 @@
 if not NpcsHandler then
     -- If NpcsHandler doesn't exist, it's created as an empty table
     NpcsHandler = {}
+
+    local function getCurrentNpcId()
+        if getNpcCid then
+            local cid = getNpcCid()
+            if cid and cid > 0 then
+                return cid
+            end
+        end
+        return 0
+    end
+
     -- The metatable is set up to call the function when NpcsHandler is called
     setmetatable(NpcsHandler, {
         __call = function(self, npc)
@@ -217,13 +228,26 @@ if not NpcsHandler then
     ---@param player Player The player to get the data for.
     ---@param key string The key to get the data for.
     function NpcsHandler:getData(player, key)
-        return self.data[player:getGuid()][key] or nil
+        local npcId = getCurrentNpcId()
+        if not self.data[npcId] then
+            self.data[npcId] = {}
+        end
+        local playerGuid = player:getGuid()
+        if not self.data[npcId][playerGuid] then
+            self.data[npcId][playerGuid] = {}
+        end
+        return self.data[npcId][playerGuid][key] or nil
     end
 
     -- This function retrieves all of the data for the player.
     ---@param player Player The player to get the data for.
     function NpcsHandler:getAllData(player)
-        return self.data[player:getGuid()] or {}
+        local npcId = getCurrentNpcId()
+        if not self.data[npcId] then
+            self.data[npcId] = {}
+        end
+        local playerGuid = player:getGuid()
+        return self.data[npcId][playerGuid] or {}
     end
 
     -- This function adds data for the player with a certain key.
@@ -231,16 +255,26 @@ if not NpcsHandler then
     ---@param key string The key to add the data for.
     ---@param data string The data to add.
     function NpcsHandler:addData(player, key, data)
-        if not self.data[player:getGuid()] then
-            self.data[player:getGuid()] = {}
+        local npcId = getCurrentNpcId()
+        if not self.data[npcId] then
+            self.data[npcId] = {}
         end
-        self.data[player:getGuid()][key] = data
+        local playerGuid = player:getGuid()
+        if not self.data[npcId][playerGuid] then
+            self.data[npcId][playerGuid] = {}
+        end
+        self.data[npcId][playerGuid][key] = data
     end
 
     -- This function resets the data for the player.
     ---@param player Player The player to reset the data for.
     function NpcsHandler:resetData(player)
-        self.data[player:getGuid()] = {}
+        local npcId = getCurrentNpcId()
+        if not self.data[npcId] then
+            self.data[npcId] = {}
+        end
+        local playerGuid = type(player) == "number" and player or player:getGuid()
+        self.data[npcId][playerGuid] = {}
     end
 
     -- This function sets the storage value for the keyword.
@@ -290,14 +324,24 @@ if not NpcsHandler then
     ---@param player Player The player object.
     ---@return NpcsHandler The talk state for the player, or the handler itself if not found.
     function NpcsHandler:getTalkState(player)
-        return self.talkState[player:getGuid()] == nil and self or self.talkState[player:getGuid()]
+        local npcId = getCurrentNpcId()
+        if not self.talkState[npcId] then
+            self.talkState[npcId] = {}
+        end
+        local playerGuid = type(player) == "number" and player or player:getGuid()
+        return self.talkState[npcId][playerGuid] == nil and self or self.talkState[npcId][playerGuid]
     end
 
     -- Sets the talk state for a player.
     ---@param state NpcsHandler The talk state to set.
     ---@param player Player The player object.
     function NpcsHandler:setTalkState(state, player)
-        self.talkState[player:getGuid()] = state
+        local npcId = getCurrentNpcId()
+        if not self.talkState[npcId] then
+            self.talkState[npcId] = {}
+        end
+        local playerGuid = type(player) == "number" and player or player:getGuid()
+        self.talkState[npcId][playerGuid] = state
     end
 
     -- Sets the response text for the keyword.
@@ -338,14 +382,22 @@ if not NpcsHandler then
     ---@param player Player The player object.
     ---@param id number The shop ID.
     function NpcsHandler:setActiveShop(player, id)
-        self.shopActive[player:getGuid()] = id
+        local npcId = getCurrentNpcId()
+        if not self.shopActive[npcId] then
+            self.shopActive[npcId] = {}
+        end
+        self.shopActive[npcId][player:getGuid()] = id
     end
 
     -- Retrieves the active shop for a player.
     ---@param player Player The player object.
     ---@return number The active shop ID.
     function NpcsHandler:getActiveShop(player)
-        return self.shopActive[player:getGuid()]
+        local npcId = getCurrentNpcId()
+        if not self.shopActive[npcId] then
+            self.shopActive[npcId] = {}
+        end
+        return self.shopActive[npcId][player:getGuid()]
     end
 
     -- Sets the greet words for the NPC.
