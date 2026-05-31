@@ -38,8 +38,10 @@ ExperienceStages magicLevelStages;
 
 using BlockedTeleportIds = std::vector<uint16_t>;
 using TokenProtectionExceptions = std::vector<uint16_t>;
+using AutoLootMoneyIds = std::set<uint16_t>;
 BlockedTeleportIds blockedTeleportIds;
 TokenProtectionExceptions tokenProtectionExceptions;
+AutoLootMoneyIds autoLootMoneyIds;
 
 bool loaded = false;
 
@@ -294,6 +296,25 @@ TokenProtectionExceptions loadLuaTokenProtectionExceptions(lua_State* L)
 		lua_pop(L, 1);
 	}
 	lua_pop(L, 1);
+	return ids;
+}
+
+AutoLootMoneyIds parseAutoLootMoneyIds(std::string_view config)
+{
+	AutoLootMoneyIds ids;
+	for (std::string_view str : explodeString(config, ";")) {
+		if (str.empty()) {
+			continue;
+		}
+
+		uint32_t id = 0;
+		const auto* begin = str.data();
+		const auto* end = str.data() + str.size();
+		const auto [ptr, ec] = std::from_chars(begin, end, id);
+		if (ec == std::errc() && ptr == end && id <= std::numeric_limits<uint16_t>::max()) {
+			ids.insert(static_cast<uint16_t>(id));
+		}
+	}
 	return ids;
 }
 
@@ -613,8 +634,11 @@ bool ConfigManager::load()
 
 	// AutoLoot Config
 	booleans[Boolean::AUTOLOOT_ENABLED] = getGlobalBoolean(L, "Autoloot_enabled", true);
+	booleans[Boolean::AUTOLOOT_AUTO_BANK] = getGlobalBoolean(L, "AutoBank", true);
+	booleans[Boolean::AUTOLOOT_GOLD_POUCH] = getGlobalBoolean(L, "AutoLootGoldPouch", true);
 	strings[String::AUTOLOOT_BLOCKIDS] = getGlobalString(L, "AutoLoot_BlockIDs", "");
-	strings[String::AUTOLOOT_MONEYIDS] = getGlobalString(L, "AutoLoot_MoneyIDs", "2148;2152;2160");
+	strings[String::AUTOLOOT_MONEYIDS] = getGlobalString(L, "AutoLoot_MoneyIDs", "3031;3035;3043;32724");
+	autoLootMoneyIds = parseAutoLootMoneyIds(strings[String::AUTOLOOT_MONEYIDS]);
 	integers[Integer::AUTOLOOT_MAXITEMS_FREE] = getGlobalInteger(L, "AutoLoot_MaxItemFree", 5);
 	integers[Integer::AUTOLOOT_MAXITEMS_PREMIUM] = getGlobalInteger(L, "AutoLoot_MaxItemPremium", 10);
 
@@ -745,6 +769,9 @@ bool ConfigManager::setString(String what, std::string_view value)
 	}
 
 	strings[what] = value;
+	if (what == String::AUTOLOOT_MONEYIDS) {
+		autoLootMoneyIds = parseAutoLootMoneyIds(strings[what]);
+	}
 	return true;
 }
 
@@ -784,3 +811,5 @@ bool ConfigManager::setFloat(float_config_t what, float value)
 const BlockedTeleportIds& ConfigManager::getBlockedTeleportIds() { return blockedTeleportIds; }
 
 const TokenProtectionExceptions& ConfigManager::getTokenProtectionExceptions() { return tokenProtectionExceptions; }
+
+const AutoLootMoneyIds& ConfigManager::getAutoLootMoneyIds() { return autoLootMoneyIds; }

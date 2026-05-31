@@ -13,8 +13,10 @@ dllCheckKickTime = 5 -- time in seconds (optional usage)
 -- Server-only custom configuration is in data/server_config.lua.
 
 Autoloot_enabled = true
+AutoBank = true
+AutoLootGoldPouch = true
 AutoLoot_BlockIDs = ""
-AutoLoot_MoneyIDs = "3031;3035;3043;9058"
+AutoLoot_MoneyIDs = "3031;3035;3043;32724"
 AutoLoot_MaxItemFree = 5
 AutoLoot_MaxItemPremium = 10
 
@@ -171,7 +173,7 @@ forgeTranscendenceC = 0.0073
 
 -- Token Protection Exceptions
 -- Items that can be moved even when token protection is enabled
-tokenProtectionExceptions = { 3043, 3035, 3031, 3492, 3577, 3578, 3579, 3580, 3581, 3582, 3583, 3584, 3585, 3586, 3587, 3588, 3589, 3590, 3591, 3592, 3593, 3594, 3595, 3596, 3597, 3598, 3599, 3600, 3601, 3602, 3603, 3604, 3605, 3606, 3607, 3697, 3698, 3699, 3700, 3723, 3724, 3725, 3726, 3727, 3728, 3641, 3642, 3643, 3644, 3645, 3646, 3647, 3648, 3649, 3650, 3651, 3652, 3653, 3654, 3655, 3656, 3657, 3658 }
+tokenProtectionExceptions = { 3043, 3035, 3031, 32724, 3492, 3577, 3578, 3579, 3580, 3581, 3582, 3583, 3584, 3585, 3586, 3587, 3588, 3589, 3590, 3591, 3592, 3593, 3594, 3595, 3596, 3597, 3598, 3599, 3600, 3601, 3602, 3603, 3604, 3605, 3606, 3607, 3697, 3698, 3699, 3700, 3723, 3724, 3725, 3726, 3727, 3728, 3641, 3642, 3643, 3644, 3645, 3646, 3647, 3648, 3649, 3650, 3651, 3652, 3653, 3654, 3655, 3656, 3657, 3658 }
 
 -- Teleport Block Configuration
 -- IDs of teleports where it is not allowed to throw items

@@ -61,6 +61,8 @@ enum Boolean
 	STAMINA_PZ,
 	PUSH_CREATURE_ZONE,
 	AUTOLOOT_ENABLED,
+	AUTOLOOT_AUTO_BANK,
+	AUTOLOOT_GOLD_POUCH,
 	ADMIN_LOCALHOST_ONLY,
 	ADMIN_REQUIRE_LOGIN,
 	ADMIN_LOGS,
@@ -305,6 +307,7 @@ float getSkillStage(uint32_t level);
 float getMagicLevelStage(uint32_t level);
 const std::vector<uint16_t>& getBlockedTeleportIds();
 const std::vector<uint16_t>& getTokenProtectionExceptions();
+const std::set<uint16_t>& getAutoLootMoneyIds();
 
 bool setBoolean(Boolean what, bool value);
 bool setString(String what, std::string_view value);
