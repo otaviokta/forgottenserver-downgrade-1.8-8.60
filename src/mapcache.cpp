@@ -517,9 +517,10 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
         }
     }
     
-    // Parse nested items
+    // Parse nested items and Canary-style tile zone nodes
     for (auto& itemNode : tileNode.children) {
-        if (static_cast<OTBM_NodeTypes_t>(itemNode.type) == OTBM_NodeTypes_t::ITEM) {
+        const auto childNodeType = static_cast<OTBM_NodeTypes_t>(itemNode.type);
+        if (childNodeType == OTBM_NodeTypes_t::ITEM) {
             auto item = parseBasicItem(loaderptr, &itemNode, nullptr);
             if (item) {
                 const ItemType& it = Item::items[item->id];
@@ -528,6 +529,12 @@ std::shared_ptr<BasicTile> MapCache::parseBasicTile(void* loaderptr, const void*
                 } else {
                     tile->items.push_back(item);
                 }
+            }
+        } else if (childNodeType == OTBM_NodeTypes_t::TILE_ZONE) {
+            std::string errorType;
+            if (!IOMap::parseTileZoneNode(loader, itemNode, tile->zoneIds, errorType)) {
+                LOG_ERROR(fmt::format("[MapCache] {}", errorType));
+                return nullptr;
             }
         }
     }

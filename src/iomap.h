@@ -52,6 +52,7 @@ enum class OTBM_NodeTypes_t : uint8_t {
     HOUSETILE = 14,
     WAYPOINTS = 15,
     WAYPOINT = 16,
+    TILE_ZONE = 19,
 };
 
 enum class OTBM_TileFlag_t : uint32_t {
@@ -140,6 +141,8 @@ public:
 
     std::string_view getLastErrorString() const { return errorString; }
     void setLastErrorString(std::string_view error) { errorString = error; }
+
+    static bool parseTileZoneNode(OTB::Loader& loader, const OTB::Node& zoneNode, std::vector<ZoneId>& zoneIds, std::string& errorType);
 
 private:
     bool parseMapDataAttributes(OTB::Loader& loader, const OTB::Node& mapNode, Map& map,
