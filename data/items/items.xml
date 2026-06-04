@@ -51836,7 +51836,8 @@
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="energy" />
 		<attribute key="magiclevelpoints" value="2" />
-		<attribute key="criticalhitchance" value="1000" />
+		<attribute key="criticalhitchance" value="500" />
+		<attribute key="criticalextradamage" value="2500" />
 		<attribute key="range" value="4" />
 		<attribute key="weight" value="1900" />
 		<attribute key="imbuementslot" value="2">
@@ -58205,7 +58206,8 @@
 		<attribute key="weaponType" value="wand" />
 		<attribute key="shootType" value="smallice" />
 		<attribute key="magiclevelpoints" value="2" />
-		<attribute key="criticalhitchance" value="1000" />
+		<attribute key="criticalhitchance" value="500" />
+		<attribute key="criticalextradamage" value="2500" />
 		<attribute key="range" value="5" />
 		<attribute key="weight" value="2600" />
 		<attribute key="imbuementslot" value="2">
@@ -68240,6 +68242,7 @@
 		<attribute key="magiclevelpoints" value="4" />
 		<attribute key="manaleechamount" value="100" />
 		<attribute key="lifeleechamount" value="200" />
+		<attribute key="criticalextradamage" value="500" />
 		<attribute key="range" value="6" />
 		<attribute key="criticalhitchance" value="500" />
 		<attribute key="weight" value="2200" />
@@ -68276,6 +68279,7 @@
 		<attribute key="magiclevelpoints" value="4" />
 		<attribute key="manaleechamount" value="100" />
 		<attribute key="lifeleechamount" value="200" />
+		<attribute key="criticalextradamage" value="500" />
 		<attribute key="range" value="6" />
 		<attribute key="weight" value="2100" />
 		<attribute key="imbuementslot" value="2">
@@ -68339,6 +68343,7 @@
 		<attribute key="absorbpercentdeath" value="7" />
 		<attribute key="manaleechamount" value="100" />
 		<attribute key="lifeleechamount" value="600" />
+		<attribute key="criticalextradamage" value="500" />
 		<attribute key="range" value="6" />
 		<attribute key="magiclevelpoints" value="4" />
 		<attribute key="weight" value="2500" />
@@ -68374,6 +68379,7 @@
 		<attribute key="magiclevelpoints" value="4" />
 		<attribute key="manaleechamount" value="100" />
 		<attribute key="lifeleechamount" value="600" />
+		<attribute key="criticalextradamage" value="500" />
 		<attribute key="range" value="6" />
 		<attribute key="weight" value="2400" />
 		<attribute key="imbuementslot" value="2">

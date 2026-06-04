@@ -1,27 +1,28 @@
 local combat = {}
 
-for i = 2.32, 2.32 do
-	combat[i] = Combat()
-	combat[i]:setParameter(COMBAT_PARAM_TYPE, COMBAT_DEATHDAMAGE)
-	combat[i]:setParameter(COMBAT_PARAM_DISTANCEEFFECT, CONST_ANI_SUDDENDEATH)
+local damageValue = 2.32
 
-	local condition = Condition(CONDITION_CURSED)
-	condition:setParameter(CONDITION_PARAM_DELAYED, 1)
+combat[damageValue] = Combat()
+combat[damageValue]:setParameter(COMBAT_PARAM_TYPE, COMBAT_DEATHDAMAGE)
+combat[damageValue]:setParameter(COMBAT_PARAM_DISTANCEEFFECT, CONST_ANI_SUDDENDEATH)
 
-	local damage = i
+local condition = Condition(CONDITION_CURSED)
+condition:setParameter(CONDITION_PARAM_DELAYED, 1)
+
+local damage = damageValue
+condition:addDamage(1, 4000, -damage)
+
+for j = 1, 23 do
+	damage = damage * 1.2
 	condition:addDamage(1, 4000, -damage)
-	for j = 1, 23 do
-		damage = damage * 1.2
-		condition:addDamage(1, 4000, -damage)
-	end
-
-	combat[i]:addCondition(condition)
 end
+
+combat[damageValue]:addCondition(condition)
 
 local spell = Spell("instant")
 
 function spell.onCastSpell(creature, var)
-	return combat[math.random(2.32, 2.32)]:execute(creature, var)
+	return combat[damageValue]:execute(creature, var)
 end
 
 spell:name("metal gargoyle curse")

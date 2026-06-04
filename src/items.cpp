@@ -99,6 +99,7 @@ const std::unordered_map<std::string, ItemParseAttributes_t> ItemParseAttributes
     {"magicpointspercent", ITEM_PARSE_MAGICPOINTSPERCENT},
     {"criticalhitchance", ITEM_PARSE_CRITICALHITCHANCE},
     {"criticalhitamount", ITEM_PARSE_CRITICALHITAMOUNT},
+    {"criticalextradamage", ITEM_PARSE_CRITICALHITAMOUNT},
     {"lifeleechchance", ITEM_PARSE_LIFELEECHCHANCE},
     {"lifeleechamount", ITEM_PARSE_LIFELEECHAMOUNT},
     {"manaleechchance", ITEM_PARSE_MANALEECHCHANCE},

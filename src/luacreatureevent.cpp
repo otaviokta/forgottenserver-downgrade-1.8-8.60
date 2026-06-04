@@ -7,6 +7,7 @@
 #include "luascript.h"
 #include "script.h"
 #include "scriptmanager.h"
+#include "tools.h"
 #include "logger.h"
 #include <fmt/format.h>
 
