@@ -69,7 +69,7 @@ private:
 	void dispatchPlayerFlush(uint32_t guid, PendingPlayerFlush pending);
 
 	// WAL helpers for crash-safe async saves
-	void savePendingFlushToDB(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save);
+	bool savePendingFlushToDB(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save);
 	void deletePendingFlushFromDB(uint32_t guid);
 
 	std::atomic<bool> saving{false};

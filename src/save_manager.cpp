@@ -188,8 +188,8 @@ void SaveManager::drainPlayerFlushAsync(uint32_t guid, std::function<void(bool)>
 		if (flushInFlight.contains(guid) || pendingFlushes.contains(guid)) {
 			flushChainCallbacks[guid].push_back(std::move(callback));
 		} else {
-			// No flush pending, proceed immediately on thread pool
-			g_threadPool.detach_task([callback = std::move(callback)]() mutable {
+			// No flush pending, deliver callback on dispatcher
+			g_dispatcher.addTask([callback = std::move(callback)]() mutable {
 				callback(true);
 			});
 		}
@@ -246,23 +246,22 @@ void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll, bool suc
 		completeTrackedFlush();
 	}
 
-	// Remove from WAL now that flush succeeded (or log failure but still clear)
-	if (success) {
-		deletePendingFlushFromDB(guid);
-	} else {
-		// Flush failed; keep WAL entry for potential recovery
-		LOG_ERROR(fmt::format("[SaveManager] Flush failed for guid={}, WAL entry preserved for recovery", guid));
-	}
-
 	auto it = pendingFlushes.find(guid);
 	if (it == pendingFlushes.end()) {
 		flushInFlight.erase(guid);
+
+		// Chain complete: delete WAL on success, keep on failure for recovery
+		if (success) {
+			deletePendingFlushFromDB(guid);
+		} else {
+			LOG_ERROR(fmt::format("[SaveManager] Flush failed for guid={}, WAL entry preserved for recovery", guid));
+		}
 
 		// Invoke all registered callbacks for this flush chain
 		auto cbIt = flushChainCallbacks.find(guid);
 		if (cbIt != flushChainCallbacks.end()) {
 			for (auto& cb : cbIt->second) {
-				g_threadPool.detach_task([cb = std::move(cb), success]() mutable {
+				g_dispatcher.addTask([cb = std::move(cb), success]() mutable {
 					cb(success);
 				});
 			}
@@ -280,7 +279,27 @@ void SaveManager::onPlayerFlushed(uint32_t guid, bool trackedBySaveAll, bool suc
 void SaveManager::dispatchPlayerFlush(uint32_t guid, PendingPlayerFlush pending)
 {
 	// Persist to WAL before dispatch so crash recovery can replay
-	savePendingFlushToDB(guid, pending.save);
+	if (!savePendingFlushToDB(guid, pending.save)) {
+		LOG_ERROR(fmt::format("[SaveManager] WAL write failed for guid={}, aborting flush chain", guid));
+		flushInFlight.erase(guid);
+		pendingFlushes.erase(guid);
+
+		// Notify all waiting callbacks with failure
+		auto cbIt = flushChainCallbacks.find(guid);
+		if (cbIt != flushChainCallbacks.end()) {
+			for (auto& cb : cbIt->second) {
+				g_dispatcher.addTask([cb = std::move(cb)]() mutable {
+					cb(false);
+				});
+			}
+			flushChainCallbacks.erase(cbIt);
+		}
+
+		if (pending.trackedBySaveAll) {
+			completeTrackedFlush();
+		}
+		return;
+	}
 
 	g_threadPool.detach_task([this, guid, pending = std::move(pending)]() mutable {
 		std::string name = std::move(pending.name);
@@ -329,16 +348,41 @@ void SaveManager::completeTrackedFlush() noexcept
 	saving.store(false, std::memory_order_release);
 }
 
-void SaveManager::savePendingFlushToDB(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save)
+bool SaveManager::savePendingFlushToDB(uint32_t guid, const IOLoginData::PlayerSaveSnapshot& save)
 {
 	Database& db = Database::getInstance();
+	DBTransaction transaction;
+	if (!transaction.begin()) {
+		LOG_ERROR(fmt::format("[SaveManager] Failed to begin WAL transaction for guid={}", guid));
+		return false;
+	}
+
+	// Atomically replace any old WAL entries for this guid
+	if (!db.executeQuery(fmt::format("DELETE FROM `player_save_async_pending` WHERE `guid` = {}", guid))) {
+		LOG_ERROR(fmt::format("[SaveManager] Failed to clear old WAL entries for guid={}", guid));
+		transaction.rollback();
+		return false;
+	}
+
 	for (size_t i = 0; i < save.queries.size(); ++i) {
 		const std::string escaped = db.escapeString(save.queries[i]);
-		db.executeQuery(fmt::format(
+		if (!db.executeQuery(fmt::format(
 			"INSERT INTO `player_save_async_pending` (`guid`, `query_index`, `query_text`, `created_at`) "
 			"VALUES ({}, {}, {}, UNIX_TIMESTAMP())",
-			guid, i, escaped));
+			guid, i, escaped)))
+		{
+			LOG_ERROR(fmt::format("[SaveManager] Failed to insert WAL entry for guid={}, query_index={}", guid, i));
+			transaction.rollback();
+			return false;
+		}
 	}
+
+	if (!transaction.commit()) {
+		LOG_ERROR(fmt::format("[SaveManager] Failed to commit WAL transaction for guid={}", guid));
+		return false;
+	}
+
+	return true;
 }
 
 void SaveManager::deletePendingFlushFromDB(uint32_t guid)
