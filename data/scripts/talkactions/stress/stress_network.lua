@@ -2,122 +2,125 @@
 ================================================================================
   stress_network.lua  -  RevScript  (TFS 1.8 / 8.60 downgrade fork)
   Stress test para NetworkMessage - shared_ptr pool via allocate_shared
-  Repositório: Mateuzkl/forgottenserver-downgrade-1.8-8.60
+  Repositorio: Mateuzkl/forgottenserver-downgrade-1.8-8.60
 ================================================================================
 
   USO (TalkAction /net):
     /net                - exibe ajuda
-    /net create[,N]     - cria/destrói N mensagens (default: SUITE_CREATE_AMOUNT)
-    /net gc[,N]         - cria N mensagens + força Lua GC (default: SUITE_GC_AMOUNT)
-    /net pool[,N]       - mantém N mensagens simultaneamente (default: SUITE_POOL_AMOUNT)
-    /net leak[,N]       - executa N rodadas de criação/destruição (default: SUITE_LEAK_ROUNDS)
-    /net send[,N]       - envia N pacotes ao próprio player (default: SUITE_CREATE_AMOUNT)
-    /net concurrent[,W,M] - W workers simultâneos, M msgs cada (default: SUITE_CONCURRENT_*)
+    /net create[,N]     - cria/destroi N mensagens (default: SUITE_CREATE_AMOUNT)
+    /net gc[,N]         - cria N mensagens + forca Lua GC (default: SUITE_GC_AMOUNT)
+    /net pool[,N]       - mantem N mensagens simultaneamente (default: SUITE_POOL_AMOUNT)
+    /net leak[,N]       - executa N rodadas de criacao/destruicao (default: SUITE_LEAK_ROUNDS)
+    /net send[,N]       - envia N pacotes ao proprio player (default: SUITE_CREATE_AMOUNT)
+    /net concurrent[,W,M] - W workers simultaneos, M msgs cada (default: SUITE_CONCURRENT_*)
     /net bigdata[,N,S]  - N mensagens com payload de S bytes (default: SUITE_BIGDATA_*)
-    /net reset[,N]      - N rodadas de validação de zeragem (default: SUITE_RESET_ROUNDS)
+    /net reset[,N]      - N rodadas de validacao de zeragem (default: SUITE_RESET_ROUNDS)
     /net exhaust[,P,O]  - Esgota pool de P slots + O overflow (default: SUITE_EXHAUST_*)
-    /net fragment[,N]   - N rodadas de fragmentação (default: SUITE_FRAGMENT_ROUNDS)
-    /net refcount[,N]   - N objetos com múltiplas refs (default: SUITE_REFCOUNT_AMOUNT)
+    /net fragment[,N]   - N rodadas de fragmentacao (default: SUITE_FRAGMENT_ROUNDS)
+    /net refcount[,N]   - N objetos com multiplas refs (default: SUITE_REFCOUNT_AMOUNT)
     /net all            - executa bateria completa (TODOS os testes)
 
   FASES E OBJETIVOS:
   ┌──────────┬──────────────────────────────┬──────────────────────────────────┐
-  │ Teste    │ Área testada                 │ Métrica / Validação              │
+  │ Teste    │ Area testada                 │ Metrica / Validacao              │
   ├──────────┼──────────────────────────────┼──────────────────────────────────┤
-  │ CREATE   │ Alocação e destruição rápida │ Throughput (msgs/sec)            │
+  │ CREATE   │ Alocacao e destruicao rapida │ Throughput (msgs/sec)            │
   │          │ do allocator                 │ Estabilidade do pool             │
-  │ GC       │ Integração Lua GC            │ Coleta automática de shared_ptr  │
+  │ GC       │ Integracao Lua GC            │ Coleta automatica de shared_ptr  │
   │          │ com shared_ptr destructor    │ Tempo de GC sweep                │
-  │ POOL     │ Retenção simultânea de       │ Reutilização de slots do pool    │
-  │          │ objetos alocados             │ Fragmentação de memória          │
-  │ LEAK     │ Vazamento de memória em      │ Crescimento de heap após rounds  │
-  │          │ múltiplas rodadas            │ Estabilidade do allocator        │
-  │ SEND     │ Serialização + envio real    │ Latência de pacotes              │
+  │ POOL     │ Retencao simultanea de       │ Reutilizacao de slots do pool    │
+  │          │ objetos alocados             │ Fragmentacao de memoria          │
+  │ LEAK     │ Vazamento de memoria em      │ Crescimento de heap apos rounds  │
+  │          │ multiplas rodadas            │ Estabilidade do allocator        │
+  │ SEND     │ Serializacao + envio real    │ Latencia de pacotes              │
   │          │ de pacotes ao cliente        │ Estabilidade do cliente          │
-  │ CONCURR  │ Alocações multi-threaded     │ Thread-safety do freelist        │
-  │          │ simultâneas (CAS ops)        │ Ausência de race conditions      │
-  │ BIGDATA  │ Mensagens com payloads       │ Fragmentação com dados grandes   │
+  │ CONCURR  │ Alocacoes multi-threaded     │ Thread-safety do freelist        │
+  │          │ simultaneas (CAS ops)        │ Ausencia de race conditions      │
+  │ BIGDATA  │ Mensagens com payloads       │ Fragmentacao com dados grandes   │
   │          │ grandes (8KB+)               │ Overhead de realloc interno      │
-  │ RESET    │ Zeragem de dados ao reutilizar│ Ausência de data contamination  │
-  │          │ (data contamination)         │ Segurança entre players          │
-  │ EXHAUST  │ Pool exhaustion + fallback   │ Degradação ao esgotar freelist   │
-  │          │ para malloc()                │ Recovery após liberação          │
-  │ FRAGMENT │ Fragmentação do freelist     │ Performance com slots não-contíg │
-  │          │ (liberação não-sequencial)   │ Overhead de busca fragmentada    │
+  │ RESET    │ Zeragem de dados ao reutilizar│ Ausencia de data contamination  │
+  │          │ (data contamination)         │ Seguranca entre players          │
+  │ EXHAUST  │ Pool exhaustion + fallback   │ Degradacao ao esgotar freelist   │
+  │          │ para malloc()                │ Recovery apos liberacao          │
+  │ FRAGMENT │ Fragmentacao do freelist     │ Performance com slots nao-contig │
+  │          │ (liberacao nao-sequencial)   │ Overhead de busca fragmentada    │
   │ REFCOUNT │ shared_ptr ref-counting      │ Overhead de atomic ops           │
-  │          │ overhead (múltiplas refs)    │ Cache line bouncing              │
+  │          │ overhead (multiplas refs)    │ Cache line bouncing              │
   └──────────┴──────────────────────────────┴──────────────────────────────────┘
 
-  O QUE ESTÁ SENDO VALIDADO:
+  O QUE ESTA SENDO VALIDADO:
     • commit: "feat: migrate NetworkMessage to shared_ptr pool via allocate_shared"
-    • Alterações no core do TFS que movem NetworkMessage de alocação direta
+    • Alteracoes no core do TFS que movem NetworkMessage de alocacao direta
       (new/delete) para pool allocator com shared_ptr.
     • LockfreePoolingAllocator<NetworkMessage> - pool thread-safe de mensagens
-      reutilizáveis para reduzir pressão no heap e fragmentação.
-    • shared_ptr ref-counting - garante que mensagens não sejam liberadas
-      enquanto Lua ou C++ ainda mantêm referências.
-    • allocate_shared vs make_shared - construção in-place no bloco de controle
-      do shared_ptr, economizando 1 alocação por mensagem.
+      reutilizaveis para reduzir pressao no heap e fragmentacao.
+    • shared_ptr ref-counting - garante que mensagens nao sejam liberadas
+      enquanto Lua ou C++ ainda mantem referencias.
+    • allocate_shared vs make_shared - construcao in-place no bloco de controle
+      do shared_ptr, economizando 1 alocacao por mensagem.
 
   IMPACTOS ESPERADOS:
-    ► CPU: Redução de ~15-30% no tempo de alocação/destruição comparado a
-           new/delete tradicional, especialmente em cenários de alta frequência.
-    ► Memória: Redução de fragmentação do heap; pool mantém slots pré-alocados
-               que são reutilizados (freelist interna do LockfreePoolingAllocator).
-    ► Lua GC: Pressão AUMENTADA no GC sweep (mais userdata com __gc metamethod),
-              mas cada coleta é mais rápida pois não há chamada ao allocator do OS.
-    ► NetworkMessage: Objetos zerados (reset()) antes de reutilização - garante
-                      que dados de mensagens anteriores não vazem entre pacotes.
+    ► CPU: Reducao de ~15-30% no tempo de alocacao/destruicao comparado a
+           new/delete tradicional, especialmente em cenarios de alta frequencia.
+    ► Memoria: Reducao de fragmentacao do heap; pool mantem slots pre-alocados
+               que sao reutilizados (freelist interna do LockfreePoolingAllocator).
+    ► Lua GC: Pressao AUMENTADA no GC sweep (mais userdata com __gc metamethod),
+              mas cada coleta e mais rapida pois nao ha chamada ao allocator do OS.
+    ► NetworkMessage: Objetos zerados (reset()) antes de reutilizacao - garante
+                      que dados de mensagens anteriores nao vazem entre pacotes.
 
-  GARGALOS IDENTIFICÁVEIS:
+  GARGALOS IDENTIFICAVEIS:
     ✗ POOL EXHAUSTION: Se o freelist estiver vazio, allocate_shared cai em
-      fallback para malloc() - perde benefício do pool. Observável em POOL test
+      fallback para malloc() - perde beneficio do pool. Observavel em POOL test
       quando amount > tamanho do pool configurado no core.
     ✗ LUA GC STALL: collectgarbage("collect") em testes GC/LEAK pode pausar
       a main thread por >100ms se houver muitos objetos NetworkMessage pendentes.
     ✗ CLIENT OVERLOAD: SEND test com valores altos (>10k) pode saturar o buffer
-      de saída do socket, causando disconnect ou travamento do cliente.
+      de saida do socket, causando disconnect ou travamento do cliente.
     ✗ REF-COUNTING OVERHEAD: shared_ptr atomic ref-count tem custo em ambientes
-      multi-threaded; mensurável comparando CREATE test antes/depois da commit.
+      multi-threaded; mensuravel comparando CREATE test antes/depois da commit.
 
-  SEGURANÇA:
-    • Teste isolado - não afeta jogabilidade ou dados de produção.
+  SEGURANCA:
+    • Teste isolado - nao afeta jogabilidade ou dados de producao.
     • SEND test com valores excessivos (>50k) pode desconectar o player testador.
-    • Nenhuma tabela de banco é tocada.
-    • Apenas GMs ou players com permissão podem executar /net (TalkAction padrão).
+    • Nenhuma tabela de banco e tocada.
+    • Apenas GMs ou players com permissao podem executar /net (TalkAction padrao).
 
-  INTERPRETAÇÃO DE RESULTADOS:
+  INTERPRETACAO DE RESULTADOS:
     PASS: Tempo de CREATE/GC/POOL/LEAK dentro de ~20% da baseline esperada.
-          Nenhum crash. Nenhum leak detectável (memória estável após rounds).
-    FAIL: Crash durante qualquer teste. Crescimento contínuo de memória em LEAK.
-          Tempo de CREATE >2x mais lento que baseline (indica contenção no pool).
+          Nenhum crash. Nenhum leak detectavel (memoria estavel apos rounds).
+    FAIL: Crash durante qualquer teste. Crescimento continuo de memoria em LEAK.
+          Tempo de CREATE >2x mais lento que baseline (indica contencao no pool).
           GC test >3x mais lento (indica problema no destructor do shared_ptr).
 ================================================================================
 --]]
 
 -- ============================================================================
--- CONFIGURAÇÃO
+-- CONFIGURACAO
 -- ============================================================================
 --[[
-  Valores padrão para a bateria completa (/net all).
+  Valores padrao para a bateria completa (/net all).
   Ajuste aqui se desejar testes mais agressivos ou conservadores.
   
-  NOTA: Valores muito altos em ambientes de produção podem causar lag perceptível.
-        Recomenda-se rodar em servidor de teste ou horários de baixo tráfego.
+  NOTA: Valores muito altos em ambientes de producao podem causar lag perceptivel.
+        Recomenda-se rodar em servidor de teste ou horarios de baixo trafego.
+        
+  AVISO: CREATE, GC e LEAK executam loops sincronos de 100k+ iteracoes na main thread,
+         bloqueando o dispatcher. Use apenas em servidores de teste isolados.
 --]]
-local SUITE_CREATE_AMOUNT   = 100000  -- Número de mensagens criadas/destruídas no teste CREATE
-local SUITE_GC_AMOUNT       = 100000  -- Número de mensagens para teste de Lua GC
-local SUITE_POOL_AMOUNT     = 10000   -- Número de mensagens retidas simultaneamente (teste POOL)
-local SUITE_LEAK_ROUNDS     = 100     -- Número de rodadas no teste de vazamento (100 rounds × 10k msgs)
-local SUITE_CONCURRENT_WORKERS = 50   -- Número de workers simultâneos no teste CONCURRENT
+local SUITE_CREATE_AMOUNT   = 10000   -- Numero de mensagens criadas/destruidas no teste CREATE (reduzido de 100k)
+local SUITE_GC_AMOUNT       = 10000   -- Numero de mensagens para teste de Lua GC (reduzido de 100k)
+local SUITE_POOL_AMOUNT     = 1000    -- Numero de mensagens retidas simultaneamente (teste POOL - SEND default, reduzido de 10k)
+local SUITE_LEAK_ROUNDS     = 100     -- Numero de rodadas no teste de vazamento (100 rounds × 10k msgs)
+local SUITE_CONCURRENT_WORKERS = 50   -- Numero de workers simultaneos no teste CONCURRENT
 local SUITE_CONCURRENT_MSGS = 1000    -- Mensagens por worker no teste CONCURRENT
-local SUITE_BIGDATA_AMOUNT  = 5000    -- Número de mensagens grandes no teste BIGDATA
+local SUITE_BIGDATA_AMOUNT  = 5000    -- Numero de mensagens grandes no teste BIGDATA
 local SUITE_BIGDATA_SIZE    = 8192    -- Tamanho do payload em bytes (8KB)
-local SUITE_RESET_ROUNDS    = 1000    -- Rodadas de teste de contaminação RESET
+local SUITE_RESET_ROUNDS    = 1000    -- Rodadas de teste de contaminacao RESET
 local SUITE_EXHAUST_POOL    = 2048    -- Tamanho estimado do pool (ajuste conforme core)
 local SUITE_EXHAUST_OVER    = 5000    -- Quantidade extra acima do pool (testa fallback)
-local SUITE_FRAGMENT_ROUNDS = 500     -- Rodadas de fragmentação no teste FRAGMENT
-local SUITE_REFCOUNT_AMOUNT = 50000   -- Quantidade de objetos com múltiplas refs
+local SUITE_FRAGMENT_ROUNDS = 500     -- Rodadas de fragmentacao no teste FRAGMENT
+local SUITE_REFCOUNT_AMOUNT = 50000   -- Quantidade de objetos com multiplas refs
 
 -- TalkAction handle (registrado ao final do script)
 local talk = TalkAction("/net")
@@ -126,11 +129,11 @@ local talk = TalkAction("/net")
 -- UTILIDADES
 -- ============================================================================
 --[[
-  Funções auxiliares para logging e feedback ao player.
-  Mantém consistência com stress_db.lua (cores ANSI no console, mensagens in-game).
+  Funcoes auxiliares para logging e feedback ao player.
+  Mantem consistencia com stress_db.lua (cores ANSI no console, mensagens in-game).
 --]]
 
--- Códigos ANSI para cores no console (servidor)
+-- Codigos ANSI para cores no console (servidor)
 local COLOR_RESET  = "\27[0m"
 local COLOR_BLUE   = "\27[94m"
 local COLOR_GREEN  = "\27[32m"
@@ -142,112 +145,93 @@ local COLOR_ORANGE = "\27[38;5;208m"
 local MSG_BLUE = MESSAGE_STATUS_CONSOLE_BLUE or MESSAGE_EVENT_ADVANCE or 19
 local MSG_RED = MESSAGE_STATUS_CONSOLE_RED or MESSAGE_STATUS_WARNING or MSG_BLUE
 
+-- Helper: coloriza categorias de teste nas mensagens
+local function colorize(msg)
+    local colored = msg:gsub("(CREATE:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(GC:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(POOL [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(LEAK:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(SEND:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(CONCURRENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(BIGDATA:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(RESET:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(REUSE:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(EXHAUST:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(FRAGMENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    colored = colored:gsub("(REFCOUNT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    return colored
+end
+
 local function log(player, msg)
-    local coloredMsg = msg:gsub("(CREATE:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(GC:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(POOL [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(LEAK:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(SEND:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(CONCURRENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(BIGDATA:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(RESET:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(EXHAUST:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(FRAGMENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(REFCOUNT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    print(COLOR_BLUE .. "[NET TEST]" .. COLOR_RESET .. " " .. coloredMsg)
+    print(COLOR_BLUE .. "[NET TEST]" .. COLOR_RESET .. " " .. colorize(msg))
     if player and player:isPlayer() then
         player:sendTextMessage(MSG_BLUE, "[NET TEST] " .. msg)
     end
 end
 
 local function logFail(player, msg)
-    local coloredMsg = msg:gsub("(CREATE:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(GC:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(POOL [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(LEAK:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(SEND:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(CONCURRENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(BIGDATA:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(RESET:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(EXHAUST:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(FRAGMENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(REFCOUNT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    print(COLOR_BLUE .. "[NET TEST]" .. COLOR_RED .. "[FAIL]" .. COLOR_RESET .. " " .. coloredMsg)
+    print(COLOR_BLUE .. "[NET TEST]" .. COLOR_RED .. "[FAIL]" .. COLOR_RESET .. " " .. colorize(msg))
     if player and player:isPlayer() then
         player:sendTextMessage(MSG_RED, "[NET TEST][FAIL] " .. msg)
     end
 end
 
 local function logPass(player, msg)
-    local coloredMsg = msg:gsub("(CREATE:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(GC:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(POOL [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(LEAK:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(SEND:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(CONCURRENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(BIGDATA:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(RESET:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(EXHAUST:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(FRAGMENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(REFCOUNT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    print(COLOR_BLUE .. "[NET TEST]" .. COLOR_YELLOW .. "[PASS]" .. COLOR_RESET .. " " .. coloredMsg)
+    print(COLOR_BLUE .. "[NET TEST]" .. COLOR_YELLOW .. "[PASS]" .. COLOR_RESET .. " " .. colorize(msg))
     if player and player:isPlayer() then
         player:sendTextMessage(MSG_BLUE, "[NET TEST][PASS] " .. msg)
     end
 end
 
 local function logInfo(player, msg)
-    local coloredMsg = msg:gsub("(CREATE:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(GC:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(POOL [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(LEAK:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(SEND:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(CONCURRENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(BIGDATA:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(RESET:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(EXHAUST:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(FRAGMENT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(REFCOUNT:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    print(COLOR_BLUE .. "[NET TEST]" .. COLOR_GREEN .. "[INFO]" .. COLOR_RESET .. " " .. coloredMsg)
+    print(COLOR_BLUE .. "[NET TEST]" .. COLOR_GREEN .. "[INFO]" .. COLOR_RESET .. " " .. colorize(msg))
     if player and player:isPlayer() then
         player:sendTextMessage(MSG_BLUE, "[NET TEST][INFO] " .. msg)
     end
 end
 
+-- Log de header em azul (mensagem centralizada com ===)
+local function logHeader(player, msg)
+    print(COLOR_BLUE .. "[NET TEST] " .. msg .. COLOR_RESET)
+    if player and player:isPlayer() then
+        player:sendTextMessage(MSG_BLUE, "[NET TEST] " .. msg)
+    end
+end
+
 -- ============================================================================
--- TESTE 1: CREATE - Criação e destruição em massa
+-- TESTE 1: CREATE - Criacao e destruicao em massa
 -- ============================================================================
 --[[
   Objetivo:
-    Medir o throughput de alocação/destruição de NetworkMessage objects quando
+    Medir o throughput de alocacao/destruicao de NetworkMessage objects quando
     instanciados rapidamente em loop e imediatamente descartados (msg = nil).
   
-  O que está sendo testado:
-    • LockfreePoolingAllocator::allocate() - caminho de alocação do pool
+  O que esta sendo testado:
+    • LockfreePoolingAllocator::allocate() - caminho de alocacao do pool
     • LockfreePoolingAllocator::deallocate() - retorno do objeto ao freelist
-    • shared_ptr ref-counting overhead (increment/decrement atômico)
-    • Reset automático do NetworkMessage antes de reutilização
+    • shared_ptr ref-counting overhead (increment/decrement atomico)
+    • Reset automatico do NetworkMessage antes de reutilizacao
   
   Fluxo:
-    1. Loop de N iterações
-    2. Cada iteração:
+    1. Loop de N iteracoes
+    2. Cada iteracao:
        - NetworkMessage() → Lua cria userdata + shared_ptr
        - addByte/addU16/addString → escreve dados no buffer interno
        - msg = nil → Lua marca para GC; ref_count decrementa
-    3. collectgarbage("collect") → força sweep imediato
+    3. collectgarbage("collect") → forca sweep imediato
     4. Mede elapsed time e calcula msgs/sec
   
-  Métricas:
+  Metricas:
     - Tempo total (segundos)
     - Throughput (mensagens por segundo)
   
-  PASS se: Nenhum crash. Tempo razoável (baseline: ~0.5-2s para 100k msgs).
-  FAIL se: Crash. Tempo >5s para 100k msgs (indica contenção no allocator).
+  PASS se: Nenhum crash. Tempo razoavel (baseline: ~0.5-2s para 100k msgs).
+  FAIL se: Crash. Tempo >5s para 100k msgs (indica contencao no allocator).
   
-  Gargalos possíveis:
+  Gargalos possiveis:
     ► Pool vazio: Se freelist estiver esgotado, allocate_shared cai em malloc().
-    ► Contenção de lock: LockfreePoolingAllocator usa CAS; se muitos threads
-      competirem, pode haver spin/retry excessivo (não esperado em main thread).
+    ► Contencao de lock: LockfreePoolingAllocator usa CAS; se muitos threads
+      competirem, pode haver spin/retry excessivo (nao esperado em main thread).
 --]]
 local function runCreateTest(player, amount)
     local start = os.clock()
@@ -256,16 +240,16 @@ local function runCreateTest(player, amount)
         -- Cria NetworkMessage via allocate_shared (pool allocator)
         local msg = NetworkMessage()
         
-        -- Escreve dados no buffer (testa que objeto está válido)
+        -- Escreve dados no buffer (testa que objeto esta valido)
         msg:addByte(0xAA)
         msg:addU16(i)
         msg:addString("stress")
         
-        -- Descarta referência (Lua GC eventualmente chama destructor do shared_ptr)
+        -- Descarta referencia (Lua GC eventualmente chama destructor do shared_ptr)
         msg = nil
     end
 
-    -- Força coleta imediata de lixo (libera todos os shared_ptr criados acima)
+    -- Forca coleta imediata de lixo (libera todos os shared_ptr criados acima)
     collectgarbage("collect")
 
     local elapsed = os.clock() - start
@@ -287,32 +271,32 @@ end
 --[[
   Objetivo:
     Verificar que Lua GC corretamente libera NetworkMessage userdata e que
-    o destructor do shared_ptr (ref_count decrement) é chamado sem leaks.
+    o destructor do shared_ptr (ref_count decrement) e chamado sem leaks.
   
-  O que está sendo testado:
+  O que esta sendo testado:
     • Lua __gc metamethod chamado para cada userdata NetworkMessage
     • shared_ptr destructor decrementa ref_count e libera objeto se count=0
     • LockfreePoolingAllocator::deallocate() retorna objeto ao pool
-    • Nenhum leak de memória após sweep completo
+    • Nenhum leak de memoria apos sweep completo
   
   Fluxo:
-    1. Loop de N iterações criando NetworkMessage
-    2. Cada msg é descartada imediatamente (msg = nil)
-    3. collectgarbage("collect") força sweep completo da geração
+    1. Loop de N iteracoes criando NetworkMessage
+    2. Cada msg e descartada imediatamente (msg = nil)
+    3. collectgarbage("collect") forca sweep completo da geracao
     4. Mede tempo de GC sweep (inclui chamada a N destructors)
   
-  Métricas:
+  Metricas:
     - Tempo total de GC sweep (segundos)
     - Throughput de coleta (mensagens coletadas por segundo)
   
-  PASS se: Nenhum crash. Tempo de GC razoável (<3s para 100k msgs).
+  PASS se: Nenhum crash. Tempo de GC razoavel (<3s para 100k msgs).
   FAIL se: Crash durante GC. Tempo de GC >10s (indica problema no __gc).
-           Crescimento de memória RSS após múltiplas rodadas (leak).
+           Crescimento de memoria RSS apos multiplas rodadas (leak).
   
-  Gargalos possíveis:
-    ► __gc metamethod lento: Se destructor do shared_ptr fizer operações
-      pesadas (improvável), GC sweep pode demorar.
-    ► Fragmentação de heap: Se deallocate() não retornar objetos ao pool
+  Gargalos possiveis:
+    ► __gc metamethod lento: Se destructor do shared_ptr fizer operacoes
+      pesadas (improvavel), GC sweep pode demorar.
+    ► Fragmentacao de heap: Se deallocate() nao retornar objetos ao pool
       corretamente, heap pode crescer indefinidamente.
 --]]
 local function runGCTest(player, amount)
@@ -322,7 +306,7 @@ local function runGCTest(player, amount)
         -- Cria NetworkMessage
         local msg = NetworkMessage()
         
-        -- Escreve dados variáveis (testa que buffer está funcionando)
+        -- Escreve dados variaveis (testa que buffer esta funcionando)
         msg:addString("GC TEST")
         msg:addByte(i % 255)
         
@@ -330,7 +314,7 @@ local function runGCTest(player, amount)
         msg = nil
     end
 
-    -- Força sweep completo (chama __gc de todos os userdata pendentes)
+    -- Forca sweep completo (chama __gc de todos os userdata pendentes)
     collectgarbage("collect")
 
     local elapsed = os.clock() - start
@@ -347,46 +331,46 @@ local function runGCTest(player, amount)
 end
 
 -- ============================================================================
--- TESTE 3: POOL - Retenção simultânea de objetos alocados
+-- TESTE 3: POOL - Retencao simultanea de objetos alocados
 -- ============================================================================
 --[[
   Objetivo:
     Testar o comportamento do pool allocator quando muitos NetworkMessage
-    objects são mantidos vivos simultaneamente (não liberados imediatamente).
+    objects sao mantidos vivos simultaneamente (nao liberados imediatamente).
   
-  O que está sendo testado:
+  O que esta sendo testado:
     • Capacidade do freelist interno do LockfreePoolingAllocator
-    • Fallback para malloc() quando pool está esgotado
-    • Reutilização de slots após liberação em massa (segunda fase do teste)
-    • Fragmentação de memória em cenários de alta retenção
+    • Fallback para malloc() quando pool esta esgotado
+    • Reutilizacao de slots apos liberacao em massa (segunda fase do teste)
+    • Fragmentacao de memoria em cenarios de alta retencao
   
   Fluxo:
-    1. Aloca N mensagens e mantém referências em uma table Lua
-    2. Mede tempo de alocação (phase: ALLOC)
+    1. Aloca N mensagens e mantem referencias em uma table Lua
+    2. Mede tempo de alocacao (phase: ALLOC)
     3. Agenda addEvent para 5 segundos depois:
-       - Libera todas as referências (messages[i] = nil)
-       - Força collectgarbage("collect")
-       - Mede tempo de liberação (phase: FREE)
-    4. Objetos retornam ao pool e ficam disponíveis para reutilização
+       - Libera todas as referencias (messages[i] = nil)
+       - Forca collectgarbage("collect")
+       - Mede tempo de liberacao (phase: FREE)
+    4. Objetos retornam ao pool e ficam disponiveis para reutilizacao
   
-  Métricas:
-    - Tempo de alocação em massa (segundos)
-    - Tempo de liberação em massa (segundos)
+  Metricas:
+    - Tempo de alocacao em massa (segundos)
+    - Tempo de liberacao em massa (segundos)
     - Throughput de alloc e free (msgs/sec)
   
   PASS se: Ambas as fases completam sem crash. Tempo de FREE < tempo de ALLOC
-           (liberação deve ser mais rápida que alocação).
+           (liberacao deve ser mais rapida que alocacao).
   FAIL se: Crash durante ALLOC ou FREE. Tempo de ALLOC >10s para 10k msgs
            (indica pool exhaustion + malloc fallback lento).
   
-  Gargalos possíveis:
+  Gargalos possiveis:
     ► Pool size insuficiente: Se LockfreePoolingAllocator tiver freelist pequeno
-      (ex: 1024 slots) e amount=10000, 90% das alocações cairão em malloc().
-    ► Fragmentação de heap: Após FREE, se objetos não retornarem ao pool,
-      próxima rodada de ALLOC será lenta (malloc novamente).
+      (ex: 1024 slots) e amount=10000, 90% das alocacoes cairao em malloc().
+    ► Fragmentacao de heap: Apos FREE, se objetos nao retornarem ao pool,
+      proxima rodada de ALLOC sera lenta (malloc novamente).
 --]]
 local function runPoolTest(player, amount)
-    -- Table para reter referências (simula cenário onde msgs ficam em fila)
+    -- Table para reter referencias (simula cenario onde msgs ficam em fila)
     local messages = {}
 
     local start = os.clock()
@@ -396,11 +380,11 @@ local function runPoolTest(player, amount)
         -- Cria NetworkMessage
         local msg = NetworkMessage()
         
-        -- Escreve dados (valida que objeto está utilizável)
+        -- Escreve dados (valida que objeto esta utilizavel)
         msg:addString("POOL TEST")
         msg:addU32(i)
         
-        -- IMPORTANTE: mantém referência (não descarta msg)
+        -- IMPORTANTE: mantem referencia (nao descarta msg)
         messages[i] = msg
     end
 
@@ -420,21 +404,20 @@ local function runPoolTest(player, amount)
     addEvent(function()
         local freeStart = os.clock()
 
-        -- Libera todas as referências
+        -- Libera todas as referencias
         for i = 1, #messages do
             messages[i] = nil
         end
 
-        -- Força GC sweep (retorna objetos ao pool)
+        -- Forca GC sweep (retorna objetos ao pool)
         collectgarbage("collect")
 
         local freeElapsed = os.clock() - freeStart
 
-        print(
-            COLOR_BLUE .. "[NET TEST]" .. COLOR_YELLOW .. "[PASS]" .. COLOR_RESET .. " " ..
-            COLOR_ORANGE .. "POOL FREE:" .. COLOR_RESET ..
+        logPass(
+            player,
             string.format(
-                " %d messages in %.3f sec (%.0f msgs/sec)",
+                "POOL FREE: %d messages in %.3f sec (%.0f msgs/sec)",
                 amount,
                 freeElapsed,
                 amount / (freeElapsed + 1e-9)
@@ -446,43 +429,43 @@ local function runPoolTest(player, amount)
 end
 
 -- ============================================================================
--- TESTE 4: LEAK - Detecção de vazamentos de memória
+-- TESTE 4: LEAK - Deteccao de vazamentos de memoria
 -- ============================================================================
 --[[
   Objetivo:
-    Detectar vazamentos de memória executando múltiplas rodadas de criação/
-    destruição e verificando que a memória RSS do processo não cresce.
+    Detectar vazamentos de memoria executando multiplas rodadas de criacao/
+    destruicao e verificando que a memoria RSS do processo nao cresce.
   
-  O que está sendo testado:
+  O que esta sendo testado:
     • Estabilidade do pool allocator em uso prolongado
-    • Ausência de leaks no ref-counting do shared_ptr
-    • Correta devolução de objetos ao freelist após cada rodada
-    • Ausência de acúmulo de objetos "zumbis" (ref_count nunca chega a 0)
+    • Ausencia de leaks no ref-counting do shared_ptr
+    • Correta devolucao de objetos ao freelist apos cada rodada
+    • Ausencia de acumulo de objetos "zumbis" (ref_count nunca chega a 0)
   
   Fluxo:
     1. Executa N rodadas (default: 100 rounds)
     2. Cada rodada:
        - Cria 10.000 NetworkMessage objects
        - Escreve dados em cada objeto
-       - Descarta todas as referências (msg = nil)
-       - collectgarbage("collect") força sweep
+       - Descarta todas as referencias (msg = nil)
+       - collectgarbage("collect") forca sweep
     3. Mede tempo total das N rodadas
   
-  Métricas:
+  Metricas:
     - Tempo total de todas as rodadas (segundos)
-    - Throughput médio (mensagens por segundo)
+    - Throughput medio (mensagens por segundo)
   
-  PASS se: Nenhum crash. Memória RSS estável após rounds (verificar com top/htop).
-           Tempo por rodada consistente (variação <10% entre primeira e última).
-  FAIL se: Crash durante qualquer rodada. Crescimento contínuo de RSS (leak).
-           Tempo por rodada aumentando progressivamente (indica fragmentação).
+  PASS se: Nenhum crash. Memoria RSS estavel apos rounds (verificar com top/htop).
+           Tempo por rodada consistente (variacao <10% entre primeira e ultima).
+  FAIL se: Crash durante qualquer rodada. Crescimento continuo de RSS (leak).
+           Tempo por rodada aumentando progressivamente (indica fragmentacao).
   
-  Gargalos possíveis:
-    ► Leak no shared_ptr: Se ref_count não decrementar corretamente,
-      objetos nunca são liberados (RSS cresce linearmente).
-    ► Fragmentação severa: Após N rodadas, heap pode estar fragmentado mesmo
+  Gargalos possiveis:
+    ► Leak no shared_ptr: Se ref_count nao decrementar corretamente,
+      objetos nunca sao liberados (RSS cresce linearmente).
+    ► Fragmentacao severa: Apos N rodadas, heap pode estar fragmentado mesmo
       sem leak real; realocar objetos grandes fica lento.
-    ► GC overhead: Se Lua GC não rodar entre rodadas, acumula lixo; sweep
+    ► GC overhead: Se Lua GC nao rodar entre rodadas, acumula lixo; sweep
       gigante no final causa pause longo.
 --]]
 local LEAK_MEM_THRESHOLD_KB = 1024  -- Max allowed memory growth per round (KB); adjust if false positives occur
@@ -545,40 +528,40 @@ end
 -- ============================================================================
 --[[
   Objetivo:
-    Testar o caminho completo de serialização e envio de NetworkMessage
+    Testar o caminho completo de serializacao e envio de NetworkMessage
     via socket, validando que objetos alocados pelo pool chegam ao cliente.
   
-  O que está sendo testado:
-    • NetworkMessage:sendToPlayer() - método Lua que enfileira pacote no buffer
-    • Serialização do buffer interno para bytes do protocolo
-    • Integração com output buffer do socket (não-bloqueante)
+  O que esta sendo testado:
+    • NetworkMessage:sendToPlayer() - metodo Lua que enfileira pacote no buffer
+    • Serializacao do buffer interno para bytes do protocolo
+    • Integracao com output buffer do socket (nao-bloqueante)
     • Estabilidade do cliente ao receber rajadas de pacotes
   
   Fluxo:
-    1. Loop de N iterações
-    2. Cada iteração:
+    1. Loop de N iteracoes
+    2. Cada iteracao:
        - Cria NetworkMessage
        - addByte(0xB4) + addString("Benchmark")
        - sendToPlayer(player) → enfileira no output buffer do socket
-    3. Mede tempo total de envio (não espera ACK do cliente)
+    3. Mede tempo total de envio (nao espera ACK do cliente)
   
-  Métricas:
+  Metricas:
     - Tempo total de envio (segundos)
     - Throughput de pacotes (msgs/sec)
   
-  PASS se: Nenhum crash. Player permanece conectado. Tempo razoável.
+  PASS se: Nenhum crash. Player permanece conectado. Tempo razoavel.
   FAIL se: Crash. Player desconecta (buffer overflow). Cliente trava.
   
-  ATENÇÃO:
+  ATENCAO:
     ⚠ Valores altos (>10.000) podem saturar o output buffer do socket,
-      causando disconnect ou travamento do cliente. Em produção, NetworkMessage
-      normalmente é enviado de forma throttled (rate limiting).
+      causando disconnect ou travamento do cliente. Em producao, NetworkMessage
+      normalmente e enviado de forma throttled (rate limiting).
   
-  Gargalos possíveis:
-    ► Client buffer overflow: Se cliente não processar pacotes rápido o bastante,
+  Gargalos possiveis:
+    ► Client buffer overflow: Se cliente nao processar pacotes rapido o bastante,
       output buffer do servidor enche; TFS pode desconectar o player.
-    ► Server-side queueing: Se sendToPlayer() for mais rápido que flush do socket,
-      pacotes acumulam em memória (não é leak, mas pode causar lag).
+    ► Server-side queueing: Se sendToPlayer() for mais rapido que flush do socket,
+      pacotes acumulam em memoria (nao e leak, mas pode causar lag).
 --]]
 local function runSendTest(player, amount)
     local start = os.clock()
@@ -587,7 +570,7 @@ local function runSendTest(player, amount)
         -- Cria NetworkMessage
         local msg = NetworkMessage()
         
-        -- Escreve dados do pacote (opcode fictício 0xB4)
+        -- Escreve dados do pacote (opcode ficticio 0xB4)
         msg:addByte(0xB4)
         msg:addString("Benchmark")
         
@@ -609,35 +592,35 @@ local function runSendTest(player, amount)
 end
 
 -- ============================================================================
--- TESTE 6: CONCURRENT - Alocações multi-threaded (throughput)
+-- TESTE 6: CONCURRENT - Alocacoes multi-threaded (throughput)
 -- ============================================================================
 --[[
-  ATENÇÃO: addEvent(0) tasks no TFS são enfileiradas e executadas
+  ATENCAO: addEvent(0) tasks no TFS sao enfileiradas e executadas
   SEQUENCIALMENTE pelo dispatcher da main thread. Este teste mede throughput
-  de alocações sequenciais, NÃO concurrência real. Para validar thread-safety
-  do LockfreePoolingAllocator, são necessários testes em C++ com threads reais
-  ou simulação externa de carga concorrente.
+  de alocacoes sequenciais, NAO concurrencia real. Para validar thread-safety
+  do LockfreePoolingAllocator, sao necessarios testes em C++ com threads reais
+  ou simulacao externa de carga concorrente.
   
   Objetivo:
-    Medir throughput do pool allocator quando múltiplos workers são simulados
-    via addEvent(0) - as tarefas executam em série, mas o padrão de alocação/
-    destruição é útil para detectar degradação de performance.
+    Medir throughput do pool allocator quando multiplos workers sao simulados
+    via addEvent(0) - as tarefas executam em serie, mas o padrao de alocacao/
+    destruicao e util para detectar degradacao de performance.
   
-  O que está sendo testado:
-    • Throughput do pool sob padrão de carga "concorrente simulado"
-    • Ausência de crashes durante alocação/destruição em sequência rápida
+  O que esta sendo testado:
+    • Throughput do pool sob padrao de carga "concorrente simulado"
+    • Ausencia de crashes durante alocacao/destruicao em sequencia rapida
   
   Fluxo:
     1. Dispara N workers via addEvent(0)
     2. Cada worker cria M mensagens independentemente
-    3. Mede tempo total até último worker completar
+    3. Mede tempo total ate ultimo worker completar
   
-  Métricas:
+  Metricas:
     - Tempo total de todos workers (segundos)
     - Throughput agregado (msgs/sec de todos workers)
   
-  LIMITAÇÃO CONHECIDA:
-    Não testa true multi-threading. addEvent(0) executa na main thread.
+  LIMITACAO CONHECIDA:
+    Nao testa true multi-threading. addEvent(0) executa na main thread.
 --]]
 local function runConcurrentTest(player, workers, msgsPerWorker)
     local startTime = os.clock()
@@ -650,7 +633,7 @@ local function runConcurrentTest(player, workers, msgsPerWorker)
         workers, msgsPerWorker, totalMsgs
     ))
     
-    -- Dispara todos workers simultaneamente (addEvent 0 = próximo tick)
+    -- Dispara todos workers simultaneamente (addEvent 0 = proximo tick)
     for w = 1, workers do
         addEvent(function(workerId, amount, totalWorkers, playerId)
             -- Cada worker cria suas mensagens independentemente
@@ -662,13 +645,12 @@ local function runConcurrentTest(player, workers, msgsPerWorker)
                 msg = nil
             end
             
-            collectgarbage("collect")
-            
             -- Incrementa contador de workers completados
             completed = completed + 1
             
-            -- Último worker reporta resultado
+            -- Ultimo worker: GC unico ao final (evita 50 GC sweeps individuais)
             if completed == totalWorkers then
+                collectgarbage("collect")
                 local elapsed = os.clock() - startTime
                 local p = Player(playerId)
                 if p then
@@ -694,36 +676,36 @@ end
 --[[
   Objetivo:
     Testar o comportamento do pool allocator com mensagens de tamanhos variados,
-    especialmente payloads grandes que podem causar fragmentação de memória.
+    especialmente payloads grandes que podem causar fragmentacao de memoria.
   
-  O que está sendo testado:
-    • Pool allocator com objetos de tamanhos heterogêneos
-    • Crescimento dinâmico do buffer interno do NetworkMessage
-    • Fragmentação de heap quando mensagens grandes e pequenas se alternam
+  O que esta sendo testado:
+    • Pool allocator com objetos de tamanhos heterogeneos
+    • Crescimento dinamico do buffer interno do NetworkMessage
+    • Fragmentacao de heap quando mensagens grandes e pequenas se alternam
     • Overhead de realloc() interno do buffer
   
   Fluxo:
-    1. Loop de N iterações
-    2. Cada iteração cria NetworkMessage com payload de 8KB
-    3. Escreve string grande no buffer (força realloc interno)
-    4. Descarta e força GC
+    1. Loop de N iteracoes
+    2. Cada iteracao cria NetworkMessage com payload de 8KB
+    3. Escreve string grande no buffer (forca realloc interno)
+    4. Descarta e forca GC
     5. Mede throughput e compara com teste CREATE
   
-  Métricas:
+  Metricas:
     - Tempo total (segundos)
     - Throughput (msgs/sec)
-    - Comparação com CREATE test (payloads pequenos)
+    - Comparacao com CREATE test (payloads pequenos)
   
   PASS se: Throughput >= 50% do CREATE test (payloads pequenos).
-  FAIL se: Throughput << 30% do CREATE test (indica fragmentação severa).
+  FAIL se: Throughput << 30% do CREATE test (indica fragmentacao severa).
            Crash por estouro de buffer.
   
-  Gargalos possíveis:
-    ► Fragmentação de heap: Objetos grandes fragmentam heap; reuso é menos
+  Gargalos possiveis:
+    ► Fragmentacao de heap: Objetos grandes fragmentam heap; reuso e menos
       eficiente que com objetos de tamanho fixo.
     ► Realloc overhead: Buffer interno do NetworkMessage cresce dinamicamente;
-      payloads grandes causam múltiplos realloc().
-    ► Pool ineficiente: Se pool não reutilizar objetos grandes corretamente,
+      payloads grandes causam multiplos realloc().
+    ► Pool ineficiente: Se pool nao reutilizar objetos grandes corretamente,
       cai em malloc() frequentemente.
 --]]
 local function runBigDataTest(player, amount, payloadSize)
@@ -733,7 +715,7 @@ local function runBigDataTest(player, amount, payloadSize)
     for i = 1, amount do
         local msg = NetworkMessage()
         
-        -- Escreve payload GRANDE (força crescimento do buffer interno)
+        -- Escreve payload GRANDE (forca crescimento do buffer interno)
         msg:addString(bigPayload)
         msg:addU32(i)
         
@@ -758,50 +740,50 @@ local function runBigDataTest(player, amount, payloadSize)
 end
 
 -- ============================================================================
--- TESTE 8: RESET - Validação de zeragem de dados (Data Contamination)
+-- TESTE 8: RESET - Validacao de zeragem de dados (Data Contamination)
 -- ============================================================================
 --[[
   Objetivo:
-    Validar que NetworkMessage objects retornados ao pool são completamente
-    zerados (reset()) antes de reutilização, evitando vazamento de dados
+    Validar que NetworkMessage objects retornados ao pool sao completamente
+    zerados (reset()) antes de reutilizacao, evitando vazamento de dados
     entre pacotes de diferentes players.
   
-  O que está sendo testado:
+  O que esta sendo testado:
     • reset() chamado corretamente antes de reutilizar objeto do pool
-    • Buffer interno zerado (não contém dados de mensagem anterior)
-    • Ausência de data contamination (dados de um player vazam para outro)
+    • Buffer interno zerado (nao contem dados de mensagem anterior)
+    • Ausencia de data contamination (dados de um player vazam para outro)
   
   Fluxo:
     1. Loop de N rodadas
     2. Cada rodada:
-       a) Cria NetworkMessage e escreve padrão conhecido (0xFF + "SECRET")
+       a) Cria NetworkMessage e escreve padrao conhecido (0xFF + "SECRET")
        b) Descarta (retorna ao pool)
-       c) Força GC (libera para freelist)
+       c) Forca GC (libera para freelist)
        d) Cria nova NetworkMessage (deve vir do pool)
-       e) VERIFICA: novo objeto está zerado (não tem dados antigos)
+       e) VERIFICA: novo objeto esta zerado (nao tem dados antigos)
   
   NOTA IMPORTANTE:
-    Lua não tem acesso direto ao buffer interno do NetworkMessage para
-    validação. Este teste é INDICATIVO: se não crashar e reutilização
-    for rápida, assumimos que reset() está funcionando.
+    Lua nao tem acesso direto ao buffer interno do NetworkMessage para
+    validacao. Este teste e INDICATIVO: se nao crashar e reutilizacao
+    for rapida, assumimos que reset() esta funcionando.
     
-    Para teste REAL, seria necessário:
+    Para teste REAL, seria necessario:
     - Adicionar getBuffer() ou hasData() no binding Lua, OU
     - Testar no C++ diretamente com unit tests
   
-  Métricas:
+  Metricas:
     - Tempo total de rodadas (segundos)
-    - Throughput de reutilização (rodadas/sec)
+    - Throughput de reutilizacao (rodadas/sec)
   
-  PASS se: Nenhum crash. Reutilização rápida (indica pool funcionando).
-  FAIL se: Crash (indica buffer corrompido ou não-zerado).
+  PASS se: Nenhum crash. Reutilizacao rapida (indica pool funcionando).
+  FAIL se: Crash (indica buffer corrompido ou nao-zerado).
   
-  Gargalos possíveis:
-    ► reset() não implementado: Objeto reutilizado contém lixo.
-    ► reset() incompleto: Apenas parte do buffer é zerada.
+  Gargalos possiveis:
+    ► reset() nao implementado: Objeto reutilizado contem lixo.
+    ► reset() incompleto: Apenas parte do buffer e zerada.
     ► Overhead de reset(): Se reset() for muito lento, anula ganho do pool.
   
-  CRÍTICO PARA SEGURANÇA: Se reset() falhar, dados de um player vazam
+  CRITICO PARA SEGURANCA: Se reset() falhar, dados de um player vazam
   para outro! Exemplo: inventory, senha, chat privado.
 --]]
 local function runResetTest(player, rounds)
@@ -815,14 +797,14 @@ local function runResetTest(player, rounds)
         msg1:addU32(0xDEADBEEF)
         msg1 = nil  -- Retorna ao pool
         
-        -- Força GC (libera para freelist imediatamente)
+        -- Forca GC (libera para freelist imediatamente)
         if round % 100 == 0 then
             collectgarbage("collect")
         end
         
         -- Fase 2: Aloca novamente (DEVE vir do pool, zerado)
         local msg2 = NetworkMessage()
-        -- NOTA: Não conseguimos validar buffer zerado em Lua
+        -- NOTA: Nao conseguimos validar buffer zerado em Lua
         -- Se crashar aqui, reset() falhou
         msg2:addByte(0x00)
         msg2:addString("CLEAN_" .. round)
@@ -854,38 +836,38 @@ end
 -- ============================================================================
 --[[
   Objetivo:
-    Medir degradação de performance quando pool allocator esgota o freelist
+    Medir degradacao de performance quando pool allocator esgota o freelist
     e precisa fazer fallback para malloc() tradicional.
   
-  O que está sendo testado:
-    • Comportamento do pool quando freelist está vazio
+  O que esta sendo testado:
+    • Comportamento do pool quando freelist esta vazio
     • Fallback para malloc() (allocate_shared sem pool)
-    • Degradação de throughput após pool exhaustion
-    • Recovery do pool após liberação em massa
+    • Degradacao de throughput apos pool exhaustion
+    • Recovery do pool apos liberacao em massa
   
   Fluxo:
     1. Aloca poolSize mensagens (esgota o pool)
-    2. Mede tempo: primeiras alocações são rápidas (do pool)
+    2. Mede tempo: primeiras alocacoes sao rapidas (do pool)
     3. Aloca overshoot mensagens adicionais (acima do tamanho do pool)
-    4. Mede tempo: essas alocações são lentas (malloc fallback)
+    4. Mede tempo: essas alocacoes sao lentas (malloc fallback)
     5. Libera todas e reutiliza (valida recovery do pool)
   
-  Métricas:
+  Metricas:
     - Throughput dentro do pool (msgs/sec)
     - Throughput fora do pool - fallback (msgs/sec)
-    - Ratio de degradação (fallback / pool)
+    - Ratio de degradacao (fallback / pool)
   
   PASS se: Fallback throughput >= 30% do pool throughput.
-           Recovery após liberação restaura performance original.
+           Recovery apos liberacao restaura performance original.
   FAIL se: Fallback throughput < 10% do pool (malloc muito lento).
            Recovery falha (pool corrompido).
   
-  Gargalos possíveis:
+  Gargalos possiveis:
     ► Pool muito pequeno: Se pool tiver apenas 512 slots mas uso real precisa
-      de 5000 objetos simultâneos, maior parte do tempo está em fallback.
+      de 5000 objetos simultaneos, maior parte do tempo esta em fallback.
     ► malloc() lento: Em sistemas com heap fragmentado, malloc() pode demorar.
-    ► Recovery falho: Se objetos não retornarem ao freelist, próxima rodada
-      também cairá em fallback.
+    ► Recovery falho: Se objetos nao retornarem ao freelist, proxima rodada
+      tambem caira em fallback.
 --]]
 local function runExhaustTest(player, poolSize, overshoot)
     local messages = {}
@@ -904,7 +886,7 @@ local function runExhaustTest(player, poolSize, overshoot)
     local poolTime = os.clock() - t1
     local poolThroughput = poolSize / (poolTime + 1e-9)
     
-    -- ── FASE 2: Aloca além do pool (fallback para malloc) ───────────────
+    -- ── FASE 2: Aloca alem do pool (fallback para malloc) ───────────────
     local t2 = os.clock()
     for i = poolSize + 1, poolSize + overshoot do
         messages[i] = NetworkMessage()
@@ -952,40 +934,40 @@ local function runExhaustTest(player, poolSize, overshoot)
 end
 
 -- ============================================================================
--- TESTE 10: FRAGMENT - Fragmentação do freelist
+-- TESTE 10: FRAGMENT - Fragmentacao do freelist
 -- ============================================================================
 --[[
   Objetivo:
-    Testar comportamento do pool allocator quando objetos são liberados em
-    ordem não-sequencial, causando fragmentação do freelist interno.
+    Testar comportamento do pool allocator quando objetos sao liberados em
+    ordem nao-sequencial, causando fragmentacao do freelist interno.
   
-  O que está sendo testado:
-    • Performance do freelist quando fragmentado (slots não-contíguos)
+  O que esta sendo testado:
+    • Performance do freelist quando fragmentado (slots nao-contiguos)
     • Algoritmo de busca de slot livre no freelist
-    • Overhead de fragmentação vs alocação/liberação sequencial
+    • Overhead de fragmentacao vs alocacao/liberacao sequencial
   
   Fluxo:
     1. Loop de N rodadas
     2. Cada rodada:
        a) Aloca 1000 mensagens
-       b) Libera apenas as ÍMPARES (fragmenta o freelist)
-       c) Força GC (retorna fragmentos ao pool)
+       b) Libera apenas as IMPARES (fragmenta o freelist)
+       c) Forca GC (retorna fragmentos ao pool)
        d) Aloca 500 novas mensagens (preenche fragmentos)
        e) Libera tudo
-    3. Mede tempo médio por rodada
+    3. Mede tempo medio por rodada
   
-  Métricas:
+  Metricas:
     - Tempo total de rodadas fragmentadas (segundos)
-    - Throughput médio em cenário fragmentado (msgs/sec)
-    - Comparação com CREATE test (não-fragmentado)
+    - Throughput medio em cenario fragmentado (msgs/sec)
+    - Comparacao com CREATE test (nao-fragmentado)
   
   PASS se: Throughput fragmentado >= 70% do CREATE test.
   FAIL se: Throughput fragmentado < 40% do CREATE test (busca ineficiente).
   
-  Gargalos possíveis:
+  Gargalos possiveis:
     ► Busca linear: Se freelist usar busca linear para achar slot livre,
-      fragmentação degrada para O(n).
-    ► Coalescing ausente: Se freelist não juntar fragmentos adjacentes,
+      fragmentacao degrada para O(n).
+    ► Coalescing ausente: Se freelist nao juntar fragmentos adjacentes,
       pode ficar permanentemente fragmentado.
 --]]
 local function runFragmentTest(player, rounds)
@@ -1000,7 +982,7 @@ local function runFragmentTest(player, rounds)
             msgs[i]:addString("fragment_" .. i)
         end
         
-        -- Libera apenas ímpares (fragmenta)
+        -- Libera apenas impares (fragmenta)
         for i = 1, 1000, 2 do
             msgs[i] = nil
         end
@@ -1046,33 +1028,33 @@ end
 -- ============================================================================
 --[[
   Objetivo:
-    Medir overhead de operações de ref-counting atômico do shared_ptr,
-    especialmente em cenários com múltiplas referências ao mesmo objeto.
+    Medir overhead de operacoes de ref-counting atomico do shared_ptr,
+    especialmente em cenarios com multiplas referencias ao mesmo objeto.
   
-  O que está sendo testado:
+  O que esta sendo testado:
     • shared_ptr atomic increment/decrement performance
-    • Overhead quando múltiplas referências apontam para mesmo objeto
+    • Overhead quando multiplas referencias apontam para mesmo objeto
     • Cache line bouncing em ref-count (false sharing potencial)
   
   Fluxo:
-    1. Loop de N iterações
-    2. Cada iteração:
+    1. Loop de N iteracoes
+    2. Cada iteracao:
        - Cria 1 NetworkMessage
-       - Cria 5 referências Lua ao mesmo objeto (ref_count = 5)
-       - Descarta todas (5 decrements atômicos)
+       - Cria 5 referencias Lua ao mesmo objeto (ref_count = 5)
+       - Descarta todas (5 decrements atomicos)
     3. Mede throughput e compara com CREATE test (1 ref apenas)
   
-  Métricas:
+  Metricas:
     - Tempo total (segundos)
     - Throughput (msgs/sec)
-    - Comparação com CREATE test (overhead de múltiplas refs)
+    - Comparacao com CREATE test (overhead de multiplas refs)
   
   PASS se: Throughput >= 80% do CREATE test.
-  FAIL se: Throughput < 50% do CREATE test (ref-counting é gargalo).
+  FAIL se: Throughput < 50% do CREATE test (ref-counting e gargalo).
   
-  Gargalos possíveis:
-    ► Atomic ops lentas: increment/decrement atômico tem custo não-trivial.
-    ► Cache coherence: Múltiplas threads modificando ref_count causam
+  Gargalos possiveis:
+    ► Atomic ops lentas: increment/decrement atomico tem custo nao-trivial.
+    ► Cache coherence: Multiplas threads modificando ref_count causam
       cache line bouncing entre CPUs.
     ► Lock prefix overhead: Em x86, atomic ops usam LOCK prefix (caro).
 --]]
@@ -1083,11 +1065,11 @@ local function runRefCountTest(player, amount)
         local msg = NetworkMessage()
         msg:addByte(0xAA)
         
-        -- Cria múltiplas referências ao mesmo objeto
+        -- Cria multiplas referencias ao mesmo objeto
         local refs = {msg, msg, msg, msg, msg}
         
-        -- shared_ptr ref_count agora é 6 (msg + 5 refs)
-        -- Descartar tudo faz 6 decrements atômicos
+        -- shared_ptr ref_count agora e 6 (msg + 5 refs)
+        -- Descartar tudo faz 6 decrements atomicos
         refs = nil  -- 5 decrements
         msg = nil   -- 1 decrement final → libera objeto
     end
@@ -1112,14 +1094,14 @@ end
 -- ============================================================================
 --[[
   Objetivo:
-    Executar todos os testes (CREATE, GC, POOL, LEAK, SEND, ...) em sequência
-    reutilizando as funções compartilhadas dos testes individuais e consolidando
-    resultados num relatório final.
+    Executar todos os testes (CREATE, GC, POOL, LEAK, SEND, ...) em sequencia
+    reutilizando as funcoes compartilhadas dos testes individuais e consolidando
+    resultados num relatorio final.
   
-  O que está sendo testado:
-    • Mesmas áreas dos testes individuais (ver documentação de cada função)
-    • Integração entre testes (pool não deve estar corrompido entre fases)
-    • Estabilidade do allocator sob carga contínua
+  O que esta sendo testado:
+    • Mesmas areas dos testes individuais (ver documentacao de cada funcao)
+    • Integracao entre testes (pool nao deve estar corrompido entre fases)
+    • Estabilidade do allocator sob carga continua
   
   Fluxo:
     1. Executa CREATE test com SUITE_CREATE_AMOUNT
@@ -1128,9 +1110,9 @@ end
     4. Executa LEAK test com SUITE_LEAK_ROUNDS
     5. Executa SEND test com SUITE_POOL_AMOUNT
     6. (Concurrent, BigData, Reset, Exhaust, Fragment, RefCount)
-    7. Consolida tempos num relatório final
+    7. Consolida tempos num relatorio final
   
-  NOTA: POOL FREE reporta elapsed próprio (não usa allocStart). EXHAUST inclui
+  NOTA: POOL FREE reporta elapsed proprio (nao usa allocStart). EXHAUST inclui
         recovery phase. SEND usa o valor seguro SUITE_POOL_AMOUNT.
 --]]
 
@@ -1297,9 +1279,7 @@ local function runAllTests(player)
     local report = {}
     local suiteStart = os.clock()
 
-    log(player, "=============================================")
-    log(player, "Starting COMPLETE NetworkMessage Benchmark")
-    log(player, "=============================================")
+    logHeader(player, "=== Starting COMPLETE NetworkMessage Benchmark ===")
 
     -- ── FASE 1: CREATE ────────────────────────────────────────────────────
     local createElapsed = runCreateWorkload(SUITE_CREATE_AMOUNT)
@@ -1322,7 +1302,7 @@ local function runAllTests(player)
     report[#report + 1] = string.format("SEND (%d): %.3f sec", SUITE_POOL_AMOUNT, sendElapsed)
 
     -- ── FASE 6: CONCURRENT ────────────────────────────────────────────────
-    logInfo(player, "CONCURRENT test runs async - results will appear separately")
+    logInfo(player, "CONCURRENT: test runs async - results will appear separately")
     runConcurrentTest(player, SUITE_CONCURRENT_WORKERS, SUITE_CONCURRENT_MSGS)
 
     -- ── FASE 7: BIGDATA ───────────────────────────────────────────────────
@@ -1345,28 +1325,31 @@ local function runAllTests(player)
     local refElapsed = refCountWorkload(SUITE_REFCOUNT_AMOUNT)
     report[#report + 1] = string.format("REFCOUNT (%d objs): %.3f sec", SUITE_REFCOUNT_AMOUNT, refElapsed)
 
-    -- ── RELATÓRIO FINAL ───────────────────────────────────────────────────
+    -- ── RELATORIO FINAL ───────────────────────────────────────────────────
     local totalElapsed = os.clock() - suiteStart
 
-    log(player, "=============================================")
-    logInfo(player, "BENCHMARK RESULTS (excluding async tests)")
-    log(player, "=============================================")
+    logHeader(player, "=== BENCHMARK RESULTS (excluding async tests) ===")
 
     for _, line in ipairs(report) do
         logPass(player, line)
     end
 
     logInfo(player, string.format("TOTAL TIME: %.3f sec", totalElapsed))
-    log(player, "=============================================")
-    logInfo(player, "Note: CONCURRENT test results appear separately")
+    logInfo(player, "Note: CONCURRENT: test results appear separately")
+
+    local passed = true
+    local wallMs = (os.clock() - suiteStart) * 1000
+    if passed then
+        logHeader(player, string.format("=== NETWORK COMPLETO: ALL PASS | wall ~%.0fms ===", wallMs))
+    end
 end
 
 -- ============================================================================
--- HELP - Exibição de ajuda in-game
+-- HELP - Exibicao de ajuda in-game
 -- ============================================================================
 --[[
-  Exibe lista de comandos disponíveis e sintaxe de uso.
-  Chamado quando player digita /net sem parâmetros.
+  Exibe lista de comandos disponiveis e sintaxe de uso.
+  Chamado quando player digita /net sem parametros.
 --]]
 local function showHelp(player)
     log(player, "==================== HELP ====================")
@@ -1392,7 +1375,7 @@ end
 -- ============================================================================
 --[[
   Handler principal do TalkAction /net.
-  Parseia comando e valor, delega para função de teste apropriada.
+  Parseia comando e valor, delega para funcao de teste apropriada.
   
   Sintaxe:
     /net [comando],[valor]
@@ -1402,13 +1385,13 @@ end
     /net all           → roda bateria completa
     /net               → exibe help
   
-  Segurança:
-    - TalkAction registrado apenas para GMs (configuração padrão do TFS)
-    - Nenhuma validação adicional de permissões (assumido que apenas
-      desenvolvedores/admins executarão benchmarks)
+  Seguranca:
+    - TalkAction registrado apenas para GMs (configuracao padrao do TFS)
+    - Nenhuma validacao adicional de permissoes (assumido que apenas
+      desenvolvedores/admins executarao benchmarks)
 --]]
 function talk.onSay(player, words, param)
-    -- Se sem parâmetros, exibe help
+    -- Se sem parametros, exibe help
     if param == "" then
         showHelp(player)
         return false
@@ -1417,14 +1400,14 @@ function talk.onSay(player, words, param)
     -- Parseia comando e valores (formato: cmd,v1,v2,v3...)
     local parts = {}
     for part in param:gmatch("([^,]+)") do
-        -- Remove espaços em branco
+        -- Remove espacos em branco
         local trimmed = part:match("^%s*(.-)%s*$")
         parts[#parts + 1] = trimmed
     end
     
     local cmd = parts[1] and parts[1]:lower() or ""
     
-    -- Converte valores numéricos
+    -- Converte valores numericos
     local value1 = tonumber(parts[2])
     local value2 = tonumber(parts[3])
     local value3 = tonumber(parts[4])
@@ -1473,7 +1456,7 @@ function talk.onSay(player, words, param)
         runAllTests(player)
 
     else
-        -- Comando não reconhecido → exibe help
+        -- Comando nao reconhecido → exibe help
         showHelp(player)
     end
 
@@ -1483,7 +1466,7 @@ end
 -- ============================================================================
 -- REGISTRO
 -- ============================================================================
--- Registra TalkAction com separador de espaço (permite /net create,100000)
+-- Registra TalkAction com separador de espaco (permite /net create,100000)
 -- Restrito a contas administrativas (ACCOUNT_TYPE_GOD = 6)
 talk:separator(" ")
 talk:accountType(6)

@@ -170,6 +170,14 @@ bool SaveManager::savePlayerSync(Player* player)
 	}
 	flushInFlight.erase(guid);
 
+	auto it = pendingFlushes.find(guid);
+	if (it != pendingFlushes.end()) {
+		PendingPlayerFlush pending = std::move(it->second);
+		pendingFlushes.erase(it);
+		flushInFlight.insert(guid);
+		dispatchPlayerFlush(guid, std::move(pending));
+	}
+
 	return success;
 }
 

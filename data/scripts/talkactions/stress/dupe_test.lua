@@ -1,64 +1,76 @@
 --[[
 ================================================================================
   dupetest.lua  -  RevScript  (TFS 1.8 / 8.60 downgrade fork)
-  Teste de Vulnerabilidades de Duplicação de Itens
-  Repositório: Mateuzkl/forgottenserver-downgrade-1.8-8.60
+  Teste de Vulnerabilidades de Duplicacao de Itens
+  Repositorio: Mateuzkl/forgottenserver-downgrade-1.8-8.60
 ================================================================================
 
-  Propósito
+  Proposito
   ─────────
-  Detecta falhas de integridade de itens exploráveis como "dupes":
-  situações onde o sistema de save threadado (PR #69) deixa itens no banco
-  após remoção da memória, ou não reflete o estado correto no DB.
+  Detecta falhas de integridade de itens exploraveis como "dupes":
+  situacoes onde o sistema de save threadado (PR #69) deixa itens no banco
+  apos remocao da memoria, ou nao reflete o estado correto no DB.
 
   USO (apenas GMs com getAccess() == true):
-    !dupetest start   - roda todas as 8 fases em sequência
-    !dupetest 1-8     - roda uma fase individualmente
-    !dupetest info    - descreve cada fase
-    !dupetest clean   - remove itens de teste do inventário
+    /dupe start   - roda todas as 8 fases em sequencia
+    /dupe 1-8     - roda uma fase individualmente
+    /dupe info    - descreve cada fase
+    /dupe clean   - remove itens de teste do inventario
 
   FASES:
   ┌────┬─────────────────────────────────────────┬──────────────────────────────────┐
   │ Ph │ Vetor de Dupe                           │ O que detecta                    │
   ├────┼─────────────────────────────────────────┼──────────────────────────────────┤
-  │  1 │ Ghost item após save flood              │ Save antigo sobrescreve novo     │
-  │  2 │ SNAPSHOT RACE: add→save→remove→save ★  │ S1 executa após S2 no worker     │
+  │  1 │ Ghost item apos save flood              │ Save antigo sobrescreve novo     │
+  │  2 │ SNAPSHOT RACE: add→save→remove→save ★  │ S1 executa apos S2 no worker     │
   │  3 │ Stackable count integrity               │ Coins extras/faltando no DB      │
   │  4 │ N rounds add/remove com save em cada    │ Ghost acumulativo por round       │
   │  5 │ Concurrent saves burst (addEvent 0)     │ Worker pool race                 │
-  │  6 │ Snapshot reversal: [A]→save→swap B→save │ Item A persiste após swap        │
-  │  7 │ Multi-item remoção parcial              │ Item extra no DB                 │
-  │  8 │ Simulação completa: flood c/ e s/ item  │ Cenário real de dupe por DC      │
+  │  6 │ Snapshot reversal: [A]→save→swap B→save │ Item A persiste apos swap        │
+  │  7 │ Multi-item remocao parcial              │ Item extra no DB                 │
+  │  8 │ Simulacao completa: flood c/ e s/ item  │ Cenario real de dupe por DC      │
   └────┴─────────────────────────────────────────┴──────────────────────────────────┘
-  ★ = fase mais crítica para o PR #69
+  ★ = fase mais critica para o PR #69
 
-  PRÉ-REQUISITO:
-    Inventário não deve conter itens dos tipos CFG.item_ns e CFG.item_st
-    antes de rodar. Use !dupetest clean para garantir.
+  PRE-REQUISITO:
+    Inventario nao deve conter itens dos tipos CFG.item_ns e CFG.item_st
+    antes de rodar. Use /dupe clean para garantir.
 
-  SEGURANÇA:
-    • Não acessa tabelas de produção diretamente (apenas leitura para verificação).
-    • Todos os itens criados são removidos ao final de cada fase.
+  SEGURANCA:
+    • Nao acessa tabelas de producao diretamente (apenas leitura para verificacao).
+    • Todos os itens criados sao removidos ao final de cada fase.
     • Requer player:getGroup():getAccess() == true.
 ================================================================================
 --]]
 
 -- ============================================================================
--- CONFIGURAÇÃO  –  ajuste para o seu servidor
+-- CONFIGURACAO  –  ajuste para o seu servidor
 -- ============================================================================
--- Itens de teste - use IDs que não interfiram com inventário real.
+-- Itens de teste - use IDs que nao interfiram com inventario real.
 -- Se o servidor tiver itens QA/debug, defina QA_ITEM_NS e QA_ITEM_ST abaixo.
-local QA_ITEM_NS = 3280   -- Fire Sword (troque por um ID de item QA/debug)
-local QA_ITEM_ST = 3031   -- Gold Coin (troque por um ID de item QA/debug)
+local QA_ITEM_NS = 3280   -- Fire Sword (troque por IDs reservados QA, ex. >= 65000)
+local QA_ITEM_ST = 3031   -- Gold Coin (troque por IDs reservados QA, ex. >= 65000)
+
+-- Seguranca: verifica no registro que os itens existem (evita IDs invalidos)
+do
+    local itemType = ItemType(QA_ITEM_NS)
+    assert(itemType and itemType:getId() == QA_ITEM_NS,
+        "QA_ITEM_NS=" .. QA_ITEM_NS .. " item invalido ou inexistente. Ajuste os IDs para itens de QA.")
+end
+do
+    local itemType = ItemType(QA_ITEM_ST)
+    assert(itemType and itemType:getId() == QA_ITEM_ST,
+        "QA_ITEM_ST=" .. QA_ITEM_ST .. " item invalido ou inexistente. Ajuste os IDs para itens de QA.")
+end
 
 local CFG = {
-    -- Item NÃO-stackável de teste
+    -- Item NAO-stackavel de teste
     item_ns       = QA_ITEM_NS,
 
-    -- Item STACKÁVEL de teste
+    -- Item STACKAVEL de teste
     item_st       = QA_ITEM_ST,
 
-    -- Número de saves rápidos por fase de flood
+    -- Numero de saves rapidos por fase de flood
     save_burst    = 8,
 
     -- Intervalo entre saves no flood (ms)
@@ -83,7 +95,8 @@ local COLOR_ORANGE = "\27[38;5;208m"
 local MSG_BLUE = MESSAGE_STATUS_CONSOLE_BLUE or MESSAGE_EVENT_ADVANCE or 19
 local MSG_RED  = MESSAGE_STATUS_CONSOLE_RED  or MESSAGE_STATUS_WARNING or MSG_BLUE
 
-local activeRun = false
+local activeRuns = {}  -- keyed by player GUID to allow multiple GMs
+local anyPhaseFailed = false  -- set to true by logFail; reset on each /dupe start
 
 local function colorPhase(msg)
     local out = msg:gsub("(Phase %d+[abc]?:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
@@ -98,6 +111,7 @@ local function log(player, msg)
 end
 
 local function logFail(player, msg)
+    anyPhaseFailed = true
     print(COLOR_BLUE .. "[DupeTest]" .. COLOR_RED .. "[FAIL]" .. COLOR_RESET .. " " .. colorPhase(msg))
     if player and player:isPlayer() then
         player:sendTextMessage(MSG_RED, "[DupeTest][FAIL] " .. msg)
@@ -127,7 +141,7 @@ local function logHeader(player, msg)
 end
 
 local function logSummary(player, msg, hasFailed)
-    -- Se hasFailed for true, mostra em vermelho; senão, em azul
+    -- Se hasFailed for true, mostra em vermelho; senao, em azul
     if hasFailed then
         print(COLOR_BLUE .. "[DupeTest]" .. COLOR_RED .. "[FAIL] " .. msg .. COLOR_RESET)
         if player and player:isPlayer() then
@@ -166,7 +180,7 @@ local function countItemsInDB(playerGuid, itemTypeId)
     return cnt
 end
 
--- Soma count total de stackável em player_items (Gold Coin, etc.)
+-- Soma count total de stackavel em player_items (Gold Coin, etc.)
 local function sumStackInDB(playerGuid, itemTypeId)
     local res = db.storeQuery(string.format(
         "SELECT COALESCE(SUM(`count`), 0) AS total FROM `player_items` WHERE `player_id`=%d AND `itemtype`=%d",
@@ -178,18 +192,22 @@ local function sumStackInDB(playerGuid, itemTypeId)
     return total
 end
 
--- Remove todos os itens de um tipo do inventário (safety cleanup)
+-- Remove todos os itens de um tipo do inventario (safety cleanup)
+-- Count items first, then remove only what exists (avoid excessive iteration)
 local function safeRemoveAll(player, itemTypeId)
-    player:removeItem(itemTypeId, 100000)
+    local count = player:getItemCount(itemTypeId)
+    if count > 0 then
+        player:removeItem(itemTypeId, count)
+    end
 end
 
--- Tenta verificar condição com retry em vez de delay fixo.
---   checkFn: retorna true se a verificação passou, false se falhou
+-- Tenta verificar condicao com retry em vez de delay fixo.
+--   checkFn: retorna true se a verificacao passou, false se falhou
 --   onPass(attempt): chamado quando checkFn retorna true
---   onFail(finalAttempt): chamado após exaurir maxRetries
+--   onFail(finalAttempt): chamado apos exaurir maxRetries
 --   initialDelay: primeiro delay antes de tentar (ms)
 --   retryInterval: intervalo entre retries (ms)
---   maxRetries: número máximo de tentativas (default 3)
+--   maxRetries: numero maximo de tentativas (default 3)
 local function verifyWithRetry(checkFn, onPass, onFail, initialDelay, retryInterval, maxRetries)
     maxRetries = maxRetries or 3
     retryInterval = retryInterval or 800
@@ -209,8 +227,8 @@ local function verifyWithRetry(checkFn, onPass, onFail, initialDelay, retryInter
     addEvent(tryVerify, initialDelay)
 end
 
--- Verifica se o player já possui itens dos tipos de teste no inventário
--- Retorna true se houver itens pré-existentes (risco de mistura)
+-- Verifica se o player ja possui itens dos tipos de teste no inventario
+-- Retorna true se houver itens pre-existentes (risco de mistura)
 local function hasPreExistingTestItems(player, guid)
     local cntNS = countItemsInDB(guid, QA_ITEM_NS)
     local cntST = sumStackInDB(guid, QA_ITEM_ST)
@@ -221,15 +239,15 @@ local function hasPreExistingTestItems(player, guid)
 end
 
 -- ============================================================================
--- PHASE 1  –  Ghost item após save flood
+-- PHASE 1  –  Ghost item apos save flood
 -- ============================================================================
 --[[
-  Adiciona 1 item não-stackável, dispara N saves em rafada, depois remove
-  o item e salva uma última vez. Verifica que o DB não retém ghost item.
+  Adiciona 1 item nao-stackavel, dispara N saves em rafada, depois remove
+  o item e salva uma ultima vez. Verifica que o DB nao retem ghost item.
 
-  FALHA INDICA: um dos saves do flood (com item) executou no worker APÓS
-  o save de remoção (sem item), sobrescrevendo o estado correto.
-  → Fila do worker não é FIFO para itens de player.
+  FALHA INDICA: um dos saves do flood (com item) executou no worker APOS
+  o save de remocao (sem item), sobrescrevendo o estado correto.
+  → Fila do worker nao e FIFO para itens de player.
 --]]
 local function runPhase1(player)
     local guid   = player:getGuid()
@@ -248,22 +266,22 @@ local function runPhase1(player)
         return false
     end
 
-    -- Flood de saves COM o item na memória
+    -- Flood de saves COM o item na memoria (async para testar PR#69)
     for i = 1, CFG.save_burst do
-        addEvent(function(pid2)
-            local p = safePlayer(pid2)
-            if p then p:save() end
-        end, i * CFG.stagger_ms, pid)
+        addEvent(function(pid2, guid2)
+            local p = safePlayer(pid2, guid2)
+            if p then p:saveAsync() end
+        end, i * CFG.stagger_ms, pid, guid)
     end
 
     -- Remove o item e faz save final
     local removeAt = CFG.save_burst * CFG.stagger_ms + 100
-    addEvent(function(pid2, tId)
-        local p = safePlayer(pid2)
+    addEvent(function(pid2, guid2, tId)
+        local p = safePlayer(pid2, guid2)
         if not p then return end
         p:removeItem(tId, 1)
         p:save()
-    end, removeAt, pid, typeId)
+    end, removeAt, pid, guid, typeId)
 
     -- Verifica DB
     addEvent(function(pid2, guid2, tId)
@@ -282,7 +300,7 @@ local function runPhase1(player)
             safeRemoveAll(p, tId)
             p:save()
         else
-            logFail(p, "Phase 1: Falha na query DB (retornou -1). Verifique player_items e conexão.")
+            logFail(p, "Phase 1: Falha na query DB (retornou -1). Verifique player_items e conexao.")
         end
     end, removeAt + CFG.verify_delay, pid, guid, typeId)
 
@@ -290,22 +308,22 @@ local function runPhase1(player)
 end
 
 -- ============================================================================
--- PHASE 2  –  SNAPSHOT RACE  ★  FASE MAIS CRÍTICA
+-- PHASE 2  –  SNAPSHOT RACE  ★  FASE MAIS CRITICA
 -- ============================================================================
 --[[
-  Replica o cenário exato de dupe por desconexão/trade:
+  Replica o cenario exato de dupe por desconexao/trade:
 
-    1. addItem         → item na MEMÓRIA
+    1. addItem         → item na MEMORIA
     2. player:save()   → snapshot S1 enfileirado: { item presente }
-    3. removeItem      → item removido da MEMÓRIA (sem save ainda)
+    3. removeItem      → item removido da MEMORIA (sem save ainda)
     4. player:save()   → snapshot S2 enfileirado: { item ausente  }
 
   Worker FIFO correto:  S1 escreve item → S2 apaga item   → DB=0 ✓
   Worker fora de ordem: S2 apaga (nada) → S1 escreve item → DB=1 = DUPE!
 
-  Cenário real explorado por jogadores:
+  Cenario real explorado por jogadores:
     pick up item → drop item/trade/DC imediato → relog
-    → item reaparece no inventário a partir do DB corrompido.
+    → item reaparece no inventario a partir do DB corrompido.
 
   FALHA AQUI = DUPE BUG CONFIRMADO no flushPlayerSave / pendingFlushes.
 --]]
@@ -315,24 +333,24 @@ local function runPhase2(player)
     local typeId = CFG.item_ns
 
     log(player, "Phase 2: SNAPSHOT RACE - add->save(S1)->remove->save(S2) | S2 deve ser o estado final.")
-    log(player, "Phase 2: FAIL aqui = dupe bug real no ordering do worker thread (PR #69).")
+    log(player, "Phase 2: se falhar aqui = dupe bug real no ordering do worker thread (PR #69).")
 
     safeRemoveAll(player, typeId)
 
-    -- 1. Adiciona item (apenas em memória)
+    -- 1. Adiciona item (apenas em memoria)
     if not player:addItem(typeId, 1, false) then
         logFail(player, "Phase 2: Falha ao criar item. Ajuste CFG.item_ns.")
         return false
     end
 
-    -- 2. Save S1: snapshot COM item → enfileirado no worker
-    local s1 = player:save()
+    -- 2. Save S1: snapshot COM item → enfileirado no worker (async para race real)
+    local s1 = player:saveAsync()
 
-    -- 3. Remove da MEMÓRIA sem salvar
+    -- 3. Remove da MEMORIA sem salvar
     player:removeItem(typeId, 1)
 
-    -- 4. Save S2: snapshot SEM item (deve ser o estado final)
-    local s2 = player:save()
+    -- 4. Save S2: snapshot SEM item (deve ser o estado final) (async, vai p/ pendingFlushes)
+    local s2 = player:saveAsync()
 
     logInfo(player, string.format(
         "Phase 2: S1=%s S2=%s | Dois saves enfileirados. Verificando DB com retry...",
@@ -367,7 +385,7 @@ local function runPhase2(player)
                 safeRemoveAll(p, typeId)
                 p:save()
             else
-                logFail(p, "Phase 2: Falha na query DB. Verifique conexão e tabela player_items.")
+                logFail(p, "Phase 2: Falha na query DB. Verifique conexao e tabela player_items.")
             end
         end,
         CFG.verify_delay, 800, 3
@@ -380,13 +398,13 @@ end
 -- PHASE 3  –  Stackable count integrity
 -- ============================================================================
 --[[
-  Testa que o count de stackáveis se mantém correto após:
+  Testa que o count de stackaveis se mantem correto apos:
     add 200 coins → save → verifica SUM=200
     remove 100    → save → verifica SUM=100
 
-  Um dupe de stackável surge se um snapshot antigo (count maior)
+  Um dupe de stackavel surge se um snapshot antigo (count maior)
   sobrescreve um snapshot mais novo (count menor), resultado em
-  coins extras no banco na próxima sessão.
+  coins extras no banco na proxima sessao.
 --]]
 local function runPhase3(player)
     local guid   = player:getGuid()
@@ -486,20 +504,20 @@ local function runPhase4(player)
         local base = (i - 1) * roundMs
 
         -- addItem + save
-        addEvent(function(pid2, tId)
-            local p = safePlayer(pid2)
+        addEvent(function(pid2, guid2, tId)
+            local p = safePlayer(pid2, guid2)
             if not p then return end
             p:addItem(tId, 1, false)
             p:save()
-        end, base, pid, typeId)
+        end, base, pid, guid, typeId)
 
         -- removeItem + save
-        addEvent(function(pid2, tId)
-            local p = safePlayer(pid2)
+        addEvent(function(pid2, guid2, tId)
+            local p = safePlayer(pid2, guid2)
             if not p then return end
             p:removeItem(tId, 1)
             p:save()
-        end, base + 120, pid, typeId)
+        end, base + 120, pid, guid, typeId)
     end
 
     local verifyAt = rounds * roundMs + CFG.verify_delay
@@ -532,10 +550,10 @@ end
 -- PHASE 5  –  Burst de saves concorrentes via addEvent(0)
 -- ============================================================================
 --[[
-  Dispara N addEvent(0) simultâneos (todos chamam player:save()).
+  Dispara N addEvent(0) simultaneos (todos chamam player:save()).
   Com o PR#69, cada save pode ser enfileirado para workers distintos.
   Verifica que o estado final (item removido) prevalece sobre os N saves
-  intermediários (com item na fila).
+  intermediarios (com item na fila).
 
   Similar ao Ph5 do stress_db.lua, mas testando itens em vez de storage.
 --]]
@@ -557,21 +575,21 @@ local function runPhase5(player)
         return false
     end
 
-    -- N saves simultâneos COM item na memória
+    -- N saves simultaneos COM item na memoria (async, satura worker pool)
     for i = 1, bursts do
-        addEvent(function(pid2)
-            local p = safePlayer(pid2)
-            if p then p:save() end
-        end, 0, pid)
+        addEvent(function(pid2, guid2)
+            local p = safePlayer(pid2, guid2)
+            if p then p:saveAsync() end
+        end, 0, pid, guid)
     end
 
-    -- Remove e save final após todos os bursts entrarem na fila
-    addEvent(function(pid2, tId)
-        local p = safePlayer(pid2)
+    -- Remove e save final apos todos os bursts entrarem na fila
+    addEvent(function(pid2, guid2, tId)
+        local p = safePlayer(pid2, guid2)
         if not p then return end
         p:removeItem(tId, 1)
         p:save()
-    end, 80, pid, typeId)
+    end, 80, pid, guid, typeId)
 
     addEvent(function(pid2, guid2, tId, n)
         local p = safePlayer(pid2, guid2)
@@ -603,10 +621,10 @@ end
 -- ============================================================================
 --[[
   Troca de itens com dois snapshots em voo:
-    S1 = snapshot com item A (não-stackável), sem item B
-    S2 = snapshot sem item A, com item B (stackável)
+    S1 = snapshot com item A (nao-stackavel), sem item B
+    S2 = snapshot sem item A, com item B (stackavel)
 
-  Cenário real: player dropa item A, pega item B, desconecta logo depois.
+  Cenario real: player dropa item A, pega item B, desconecta logo depois.
   Worker correto (FIFO):    S1 → S2:  DB tem B, sem A          ✓
   Worker fora de ordem:     S2 → S1:  DB tem A (ghost!) sem B  = DUPE de A
 
@@ -615,8 +633,8 @@ end
 local function runPhase6(player)
     local guid  = player:getGuid()
     local pid   = player:getId()
-    local typeA = CFG.item_ns   -- não-stackável
-    local typeB = CFG.item_st   -- stackável (tipo diferente)
+    local typeA = CFG.item_ns   -- nao-stackavel
+    local typeB = CFG.item_st   -- stackavel (tipo diferente)
 
     log(player, "Phase 6: Snapshot reversal - [A]->save(S1)->remove A, add B->save(S2) | DB deve ter so B...")
 
@@ -629,10 +647,10 @@ local function runPhase6(player)
         return false
     end
 
-    -- S1: { A=1, B=0 }
-    player:save()
+    -- S1: { A=1, B=0 } (async — enfileirado no worker)
+    player:saveAsync()
 
-    -- Troca: remove A, adiciona B (sem save intermediário)
+    -- Troca: remove A, adiciona B (sem save intermediario)
     player:removeItem(typeA, 1)
 
     if not player:addItem(typeB, 1, false) then
@@ -642,8 +660,8 @@ local function runPhase6(player)
         return false
     end
 
-    -- S2: { A=0, B=1 }
-    player:save()
+    -- S2: { A=0, B=1 } (async — pendingFlushes atras de S1)
+    player:saveAsync()
 
     logInfo(player, string.format(
         "Phase 6: S1={A} e S2={B} enfileirados. S2 deve ganhar. Verificando em %dms...",
@@ -684,14 +702,14 @@ local function runPhase6(player)
 end
 
 -- ============================================================================
--- PHASE 7  –  Multi-item: remoção parcial
+-- PHASE 7  –  Multi-item: remocao parcial
 -- ============================================================================
 --[[
-  Adiciona 3 itens não-stackáveis (slots diferentes), salva, remove 2,
+  Adiciona 3 itens nao-stackaveis (slots diferentes), salva, remove 2,
   salva novamente. O DB deve ter exatamente 1 item restante.
 
-  Detecta se saves anteriores (com 3 itens) persistem no banco após saves
-  mais novos (com apenas 1 item), simulando remoção parcial de inventário.
+  Detecta se saves anteriores (com 3 itens) persistem no banco apos saves
+  mais novos (com apenas 1 item), simulando remocao parcial de inventario.
 --]]
 local function runPhase7(player)
     local guid   = player:getGuid()
@@ -721,16 +739,16 @@ local function runPhase7(player)
         return false
     end
 
-    -- Save com 3 itens
-    player:save()
+    -- Save com 3 itens (async)
+    player:saveAsync()
 
     -- Remove total-1 itens
     for i = 1, total - 1 do
         player:removeItem(typeId, 1)
     end
 
-    -- Save com 1 item
-    player:save()
+    -- Save com 1 item (async, pendingFlushes)
+    player:saveAsync()
 
     addEvent(function(pid2, guid2, tId, expected)
         local p = safePlayer(pid2, guid2)
@@ -762,24 +780,24 @@ local function runPhase7(player)
 end
 
 -- ============================================================================
--- PHASE 8  –  Simulação completa de dupe por desconexão (worst case)
+-- PHASE 8  –  Simulacao completa de dupe por desconexao (worst case)
 -- ============================================================================
 --[[
-  Combina todos os vetores anteriores num único teste worst-case:
+  Combina todos os vetores anteriores num unico teste worst-case:
 
     1. addItem
     2. Flood A: N saves COM item  (simula auto-saves enquanto item estava no inv)
     3. removeItem  (sem save)
-    4. Flood B: M saves SEM item  (simula saves pós-drop/disconnect)
+    4. Flood B: M saves SEM item  (simula saves pos-drop/disconnect)
     5. Save final de cleanup
     6. Verifica: DB deve ser 0
 
-  Este é o cenário exato de:
-    • Player pega item, carrega por vários saves automáticos, dropa, desconecta
-    • Player está num trade, saves ocorrem, trade é cancelado, DC imediato
+  Este e o cenario exato de:
+    • Player pega item, carrega por varios saves automaticos, dropa, desconecta
+    • Player esta num trade, saves ocorrem, trade e cancelado, DC imediato
     • Forge: item consumido, saves pendentes, servidor reinicia antes de draining
 
-  FALHA = cenário real que seria explorado por jogadores.
+  FALHA = cenario real que seria explorado por jogadores.
 --]]
 local function runPhase8(player)
     local guid   = player:getGuid()
@@ -801,36 +819,36 @@ local function runPhase8(player)
         return false
     end
 
-    -- Flood A: saves COM item
+    -- Flood A: saves COM item (async)
     for i = 1, burstA do
-        addEvent(function(pid2)
-            local p = safePlayer(pid2)
-            if p then p:save() end
-        end, i * CFG.stagger_ms, pid)
+        addEvent(function(pid2, guid2)
+            local p = safePlayer(pid2, guid2)
+            if p then p:saveAsync() end
+        end, i * CFG.stagger_ms, pid, guid)
     end
 
     -- Remove item (sem save ainda)
     local removeAt = burstA * CFG.stagger_ms + 80
-    addEvent(function(pid2, tId)
-        local p = safePlayer(pid2)
+    addEvent(function(pid2, guid2, tId)
+        local p = safePlayer(pid2, guid2)
         if not p then return end
         p:removeItem(tId, 1)
-    end, removeAt, pid, typeId)
+    end, removeAt, pid, guid, typeId)
 
-    -- Flood B: saves SEM item
+    -- Flood B: saves SEM item (async)
     for i = 1, burstB do
-        addEvent(function(pid2)
-            local p = safePlayer(pid2)
-            if p then p:save() end
-        end, removeAt + 20 + i * CFG.stagger_ms, pid)
+        addEvent(function(pid2, guid2)
+            local p = safePlayer(pid2, guid2)
+            if p then p:saveAsync() end
+        end, removeAt + 20 + i * CFG.stagger_ms, pid, guid)
     end
 
-    -- Save final
+    -- Save final (async)
     local finalAt = removeAt + 20 + burstB * CFG.stagger_ms + 80
-    addEvent(function(pid2)
-        local p = safePlayer(pid2)
-        if p then p:save() end
-    end, finalAt, pid)
+    addEvent(function(pid2, guid2)
+        local p = safePlayer(pid2, guid2)
+        if p then p:saveAsync() end
+    end, finalAt, pid, guid)
 
     -- Verifica
     addEvent(function(pid2, guid2, tId, nA, nB)
@@ -868,7 +886,7 @@ end
 -- ============================================================================
 -- TALKACTION
 -- ============================================================================
-local dupeAction = TalkAction("!dupetest")
+local dupeAction = TalkAction("/dupe")
 dupeAction:separator(" ")
 dupeAction:access(true)
 
@@ -891,7 +909,7 @@ function dupeAction.onSay(player, words, param)
             "Ph6  Reversal: [A]->save->swap por B->save | somente B no DB",
             "Ph7  Multi-item: add 3->remove 2->save | DB deve ter 1",
             "Ph8  Simulacao completa: flood c/item + remocao + flood s/item",
-            "Uso: !dupetest [start|1-8|info|clean]",
+            "Uso: /dupe [start|1-8|info|clean]",
             string.format("CFG: item_ns=%d item_st=%d verify_delay=%dms",
                 CFG.item_ns, CFG.item_st, CFG.verify_delay),
         }
@@ -903,14 +921,14 @@ function dupeAction.onSay(player, words, param)
 
     -- ── CLEAN ─────────────────────────────────────────────────────────────────
     if cmd == "clean" then
-        if activeRun then
-            log(player, "Teste em andamento – aguarde conclusão antes de limpar.")
+        if activeRuns[player:getGuid()] then
+            log(player, "Teste em andamento – aguarde conclusao antes de limpar.")
             return false
         end
         safeRemoveAll(player, CFG.item_ns)
         safeRemoveAll(player, CFG.item_st)
         player:save()
-        log(player, "Itens de teste removidos do inventário e save feito.")
+        log(player, "Itens de teste removidos do inventario e save feito.")
         return false
     end
 
@@ -922,24 +940,24 @@ function dupeAction.onSay(player, words, param)
     -- ── FASE INDIVIDUAL ───────────────────────────────────────────────────────
     local phaseNum = tonumber(cmd)
     if phaseNum then
-        if activeRun then
-            log(player, "Teste em andamento – aguarde conclusão antes de iniciar nova fase.")
+        if activeRuns[player:getGuid()] then
+            log(player, "Teste em andamento – aguarde conclusao antes de iniciar nova fase.")
             return false
         end
         if hasPreExistingTestItems(player, player:getGuid()) then
             logFail(player, string.format(
-                "Inventário já contém itens dos tipos %d e/ou %d. Use !dupetest clean primeiro.",
+                "Inventario ja contem itens dos tipos %d e/ou %d. Use /dupe clean primeiro.",
                 QA_ITEM_NS, QA_ITEM_ST
             ))
             return false
         end
         local fn = phaseMap[phaseNum]
         if fn then
-            activeRun = true
+            activeRuns[player:getGuid()] = true
             local ok, err = xpcall(fn, debug.traceback, player)
             if not ok then
                 logFail(player, "Fase " .. phaseNum .. " encontrou erro: " .. tostring(err))
-                activeRun = false
+                activeRuns[player:getGuid()] = false
             else
                 local maxDuration = math.max(
                     CFG.save_burst * CFG.stagger_ms + 100 + CFG.verify_delay + 500,
@@ -947,28 +965,29 @@ function dupeAction.onSay(player, words, param)
                     2 * CFG.verify_delay + 800,
                     5 * 300 + CFG.verify_delay + 500
                 ) + 500
-                addEvent(function() activeRun = false end, maxDuration)
+                local guid = player:getGuid()
+                addEvent(function(g) activeRuns[g] = false end, maxDuration, guid)
             end
         else
-            player:sendTextMessage(MSG_BLUE, "Fase inválida. Use 1-8, start, info ou clean.")
+            player:sendTextMessage(MSG_BLUE, "Fase invalida. Use 1-8, start, info ou clean.")
         end
         return false
     end
 
-    -- ── START – todas as fases em sequência ───────────────────────────────────
+    -- ── START – todas as fases em sequencia ───────────────────────────────────
     if cmd == "" or cmd == "start" or cmd == "all" then
-        if activeRun then
-            log(player, "DupeTest já em andamento – aguarde conclusão.")
+        if activeRuns[player:getGuid()] then
+            log(player, "DupeTest ja em andamento – aguarde conclusao.")
             return false
         end
         if hasPreExistingTestItems(player, player:getGuid()) then
             logFail(player, string.format(
-                "Inventário já contém itens dos tipos %d e/ou %d. Use !dupetest clean primeiro.",
+                "Inventario ja contem itens dos tipos %d e/ou %d. Use /dupe clean primeiro.",
                 QA_ITEM_NS, QA_ITEM_ST
             ))
             return false
         end
-        activeRun = true
+        activeRuns[player:getGuid()] = true
 
         -- Cada fase precisa de:
         --   Phase 3 tem 2x verify_delay aninhado → mais lenta
@@ -990,21 +1009,26 @@ function dupeAction.onSay(player, words, param)
             addEvent(function(pid2, idx)
                 local p = safePlayer(pid2)
                 if not p then return end
-                logInfo(p, string.format("-- Iniciando Phase %d/8 --", idx))
+                logHeader(p, string.format("-- Iniciando Phase %d/8 --", idx))
                 local fn = phaseMap[idx]
                 if fn then fn(p) end
             end, (i - 1) * phaseDuration, pid, i)
         end
 
         -- Resumo final
-        addEvent(function(pid2)
+        anyPhaseFailed = false
+        local guid = player:getGuid()
+        addEvent(function(pid2, g)
             local p = safePlayer(pid2)
             if p then
-                logHeader(p, "=== DupeTest COMPLETO. Revise os [PASS]/[FAIL] acima. ===")
-                logInfo(p, "Phase 2 e a mais critica: FAIL la = dupe real confirmado no PR#69.")
+                if anyPhaseFailed then
+                    logHeader(p, "=== DupeTest COMPLETO - UMA OU MAIS FASES FALHARAM ===")
+                else
+                    logHeader(p, "=== DupeTest COMPLETO - TODAS AS 8 FASES PASSARAM ===")
+                end
             end
-            activeRun = false
-        end, 8 * phaseDuration + 1500, pid)
+            activeRuns[g] = false
+        end, 8 * phaseDuration + 1500, pid, guid)
 
         logHeader(player, string.format(
             "Fases espacadas ~%.0fs cada | resultados aparecem gradualmente.",
@@ -1013,10 +1037,9 @@ function dupeAction.onSay(player, words, param)
         return false
     end
 
-    player:sendTextMessage(MSG_BLUE, "Uso: !dupetest [start|1-8|info|clean]")
+    player:sendTextMessage(MSG_BLUE, "Uso: /dupe [start|1-8|info|clean]")
     return false
 end
 
 dupeAction:accountType(6)
-dupeAction:access(true)
 dupeAction:register()

@@ -2393,6 +2393,19 @@ int luaPlayerSave(lua_State* L)
 	return 1;
 }
 
+int luaPlayerSaveAsync(lua_State* L)
+{
+	// player:saveAsync()
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		player->setLoginPosition(player->getPosition());
+		pushBoolean(L, g_saveManager.savePlayer(player));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerPopupFYI(lua_State* L)
 {
 	// player:popupFYI(message)
@@ -4204,6 +4217,7 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "addMapMark", luaPlayerAddMapMark);
 
 	registerMethod("Player", "save", luaPlayerSave);
+	registerMethod("Player", "saveAsync", luaPlayerSaveAsync);
 	registerMethod("Player", "popupFYI", luaPlayerPopupFYI);
 
 	registerMethod("Player", "isPzLocked", luaPlayerIsPzLocked);
