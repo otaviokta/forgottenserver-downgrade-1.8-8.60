@@ -374,7 +374,17 @@ void ProtocolGame::login(uint32_t characterId, uint32_t accountId, OperatingSyst
 
 		const auto loginPlayer = player;
 		g_threadPool.detach_task([self = getThis(), loginPlayer, reservedGuid, accountId, operatingSystem]() {
-			g_saveManager.drainPlayerFlush(reservedGuid);	// Drain any pending save flush before loading player data from DB.
+			// Drain any pending save flush before loading player data from DB.
+			if (!g_saveManager.drainPlayerFlush(reservedGuid)) {
+				g_dispatcher.addTask([self, reservedGuid]() {
+					g_game.releaseLogin(reservedGuid);
+					if (self->player) {
+						self->disconnectClient(
+							"Character data is still being saved. Please try again in a few seconds.");
+					}
+				});
+				return;
+			}
 
 			const bool loaded = IOLoginData::loadPlayerById(loginPlayer.get(), reservedGuid, true);
 			g_dispatcher.addTask([self, reservedGuid, accountId, loaded, operatingSystem]() {
