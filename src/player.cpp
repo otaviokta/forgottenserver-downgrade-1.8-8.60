@@ -1191,8 +1191,6 @@ void Player::sendIcons() const
 		return;
 	}
 	client->sendIcons(getClientIcons());
-	// Additional 64-bit icons for AstraClient (method has internal isAstraClient guard)
-	client->sendIcons(getClientIcons64(), getBakragoreIcon());
 }
 
 void Player::updateInventoryWeight()
