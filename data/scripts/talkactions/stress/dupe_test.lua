@@ -1004,22 +1004,22 @@ function dupeAction.onSay(player, words, param)
         ))
 
         local pid = player:getId()
+        local guid = player:getGuid()
 
         for i = 1, 8 do
-            addEvent(function(pid2, idx)
-                local p = safePlayer(pid2)
+            addEvent(function(pid2, g2, idx)
+                local p = safePlayer(pid2, g2)
                 if not p then return end
                 logHeader(p, string.format("-- Iniciando Phase %d/8 --", idx))
                 local fn = phaseMap[idx]
                 if fn then fn(p) end
-            end, (i - 1) * phaseDuration, pid, i)
+            end, (i - 1) * phaseDuration, pid, guid, i)
         end
 
         -- Resumo final
         anyPhaseFailed = false
-        local guid = player:getGuid()
         addEvent(function(pid2, g)
-            local p = safePlayer(pid2)
+            local p = safePlayer(pid2, g)
             if p then
                 if anyPhaseFailed then
                     logHeader(p, "=== DupeTest COMPLETO - UMA OU MAIS FASES FALHARAM ===")

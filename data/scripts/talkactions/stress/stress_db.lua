@@ -111,40 +111,39 @@ local COLOR_YELLOW = "\27[33m"
 local COLOR_RED = "\27[31m"
 local COLOR_ORANGE = "\27[38;5;208m"
 
+local function colorPhase(msg)
+    local out = msg:gsub("(Phase %d+[abc]? [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    out = out:gsub("(Phase %d+[abc]?:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    out = out:gsub("(Ph%d+ [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    out = out:gsub("(Ph%d+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    return out
+end
+
 local function log(player, msg)
-    local coloredMsg = msg:gsub("(Phase %d+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    print(COLOR_BLUE .. "[StressDB]" .. COLOR_RESET .. " " .. coloredMsg)
+    print(COLOR_BLUE .. "[StressDB]" .. COLOR_RESET .. " " .. colorPhase(msg))
     if player and player:isPlayer() then
-        player:sendTextMessage(MSG_BLUE, "[StressDB] " .. msg)
+        player:sendTextMessage(MSG_BLUE, "[StressDB] " .. colorPhase(msg))
     end
 end
 
 local function logFail(player, msg)
-    local coloredMsg = msg:gsub("(Phase %d+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    print(COLOR_BLUE .. "[StressDB]" .. COLOR_RED .. "[FAIL]" .. COLOR_RESET .. " " .. coloredMsg)
+    print(COLOR_BLUE .. "[StressDB]" .. COLOR_RED .. "[FAIL]" .. COLOR_RESET .. " " .. colorPhase(msg))
     if player and player:isPlayer() then
-        player:sendTextMessage(MSG_RED, "[StressDB][FAIL] " .. msg)
+        player:sendTextMessage(MSG_RED, "[StressDB][FAIL] " .. colorPhase(msg))
     end
 end
 
 local function logPass(player, msg)
-    local coloredMsg = msg:gsub("(Phase %d+[abc]? [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(Phase %d+[abc]?:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(Ph%d+ [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(Ph%d+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    print(COLOR_BLUE .. "[StressDB]" .. COLOR_YELLOW .. "[PASS]" .. COLOR_RESET .. " " .. coloredMsg)
+    print(COLOR_BLUE .. "[StressDB]" .. COLOR_YELLOW .. "[PASS]" .. COLOR_RESET .. " " .. colorPhase(msg))
     if player and player:isPlayer() then
-        player:sendTextMessage(MSG_BLUE, "[StressDB][PASS] " .. msg)
+        player:sendTextMessage(MSG_BLUE, "[StressDB][PASS] " .. colorPhase(msg))
     end
 end
 
 local function logInfo(player, msg)
-    local coloredMsg = msg:gsub("(Phase %d+[abc]?:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(Ph%d+ [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    coloredMsg = coloredMsg:gsub("(Ph%d+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
-    print(COLOR_BLUE .. "[StressDB]" .. COLOR_GREEN .. "[INFO]" .. COLOR_RESET .. " " .. coloredMsg)
+    print(COLOR_BLUE .. "[StressDB]" .. COLOR_GREEN .. "[INFO]" .. COLOR_RESET .. " " .. colorPhase(msg))
     if player and player:isPlayer() then
-        player:sendTextMessage(MSG_BLUE, "[StressDB][INFO] " .. msg)
+        player:sendTextMessage(MSG_BLUE, "[StressDB][INFO] " .. colorPhase(msg))
     end
 end
 
@@ -186,17 +185,6 @@ local function readStatusVar(varName)
     local v = tonumber(result.getString(res, "Value")) or 0
     result.free(res)
     return v
-end
-
--- Helper: executa storeQuery e chama callback se resultado for userdata
-local function withQuery(query, callback)
-    local res = db.storeQuery(query)
-    if res and res ~= false and res ~= nil then
-        local ret = callback(res)
-        result.free(res)
-        return ret
-    end
-    return nil
 end
 
 -- ============================================================================

@@ -172,21 +172,21 @@ end
 local function logFail(player, msg)
     print(COLOR_BLUE .. "[NET TEST]" .. COLOR_RED .. "[FAIL]" .. COLOR_RESET .. " " .. colorize(msg))
     if player and player:isPlayer() then
-        player:sendTextMessage(MSG_RED, "[NET TEST][FAIL] " .. msg)
+        player:sendTextMessage(MSG_RED, "[NET TEST][FAIL] " .. colorize(msg))
     end
 end
 
 local function logPass(player, msg)
     print(COLOR_BLUE .. "[NET TEST]" .. COLOR_YELLOW .. "[PASS]" .. COLOR_RESET .. " " .. colorize(msg))
     if player and player:isPlayer() then
-        player:sendTextMessage(MSG_BLUE, "[NET TEST][PASS] " .. msg)
+        player:sendTextMessage(MSG_BLUE, "[NET TEST][PASS] " .. colorize(msg))
     end
 end
 
 local function logInfo(player, msg)
     print(COLOR_BLUE .. "[NET TEST]" .. COLOR_GREEN .. "[INFO]" .. COLOR_RESET .. " " .. colorize(msg))
     if player and player:isPlayer() then
-        player:sendTextMessage(MSG_BLUE, "[NET TEST][INFO] " .. msg)
+        player:sendTextMessage(MSG_BLUE, "[NET TEST][INFO] " .. colorize(msg))
     end
 end
 
