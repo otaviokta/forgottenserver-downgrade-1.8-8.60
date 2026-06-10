@@ -51,6 +51,13 @@ public:
 	[[nodiscard]] uint64_t getLastSaveTime() const noexcept { return lastSaveDurationMs.load(std::memory_order_acquire); }
 	[[nodiscard]] uint32_t getLastPlayerCount() const noexcept { return lastPlayersSaved.load(std::memory_order_acquire); }
 
+	// Returns true if the given GUID's WAL recovery failed at startup;
+	// saves will be rejected and login should be blocked pending manual resolution.
+	[[nodiscard]] bool hasFailedRecovery(uint32_t guid) const noexcept
+	{
+		return failedRecoveryGuids.contains(guid);
+	}
+
 private:
 	struct PendingPlayerFlush
 	{

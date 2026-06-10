@@ -998,7 +998,7 @@ local function runPhase9(player)
             -- Timeout ja tratou, ignorar callback tardio
             return
         end
-        g_scheduler.stopEvent(timeoutEvent)
+        stopEvent(timeoutEvent)
 
         local p = safePlayer(pid, guid)
         if not p then
@@ -1062,7 +1062,7 @@ function dupeAction.onSay(player, words, param)
             "Ph6  Reversal: [A]->save->swap por B->save | somente B no DB",
             "Ph7  Multi-item: add 3->remove 2->save | DB deve ter 1",
             "Ph8  Simulacao completa: flood c/item + remocao + flood s/item",
-            "Ph9  * BARRREIRA DE LOGIN: drainAsyncSave + callback | testa PR#78",
+            "Ph9  * BARREIRA DE LOGIN: drainAsyncSave + callback | testa PR#78",
             "Uso: /dupe [start|1-9|info|clean]",
             string.format("CFG: item_ns=%d item_st=%d verify_delay=%dms",
                 CFG.item_ns, CFG.item_st, CFG.verify_delay),

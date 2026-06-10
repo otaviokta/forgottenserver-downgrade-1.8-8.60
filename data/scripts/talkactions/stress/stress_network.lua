@@ -378,11 +378,11 @@ local function runResetTest(player, rounds, done)
 end
 
 local function runExhaustTest(player, poolSize, overshoot, done)
-    poolSize = clampInt(poolSize, SUITE_EXHAUST_POOL, 1, 10000)
-    overshoot = clampInt(overshoot, SUITE_EXHAUST_OVER, 1, 20000)
+    poolSize = clampInt(poolSize, SUITE_EXHAUST_POOL, 1, 5000)
+    overshoot = clampInt(overshoot, SUITE_EXHAUST_OVER, 1, 10000)
 
     local messages = {}
-    logInfo(player, string.format("EXHAUST: allocating %d pool msgs + %d overshoot msgs.", poolSize, overshoot))
+    logInfo(player, string.format("EXHAUST: allocating %d pool msgs + %d overshoot msgs. WARNING: large values may cause lag.", poolSize, overshoot))
 
     local t1 = os.clock()
     for i = 1, poolSize do

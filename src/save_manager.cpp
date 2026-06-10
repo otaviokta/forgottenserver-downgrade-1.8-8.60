@@ -367,68 +367,38 @@ bool SaveManager::savePendingFlushToDB(uint32_t guid, const IOLoginData::PlayerS
 	}
 
 	Database& db = Database::getInstance();
-	static constexpr int WAL_RETRY_COUNT = 3;
-	static constexpr int WAL_RETRY_DELAY_MS = 200;
 
-	for (int attempt = 1; attempt <= WAL_RETRY_COUNT; ++attempt) {
-		DBTransaction transaction;
-		if (!transaction.begin()) {
-			LOG_ERROR(fmt::format("[SaveManager] Failed to begin WAL transaction for guid={} (attempt {}/{})",
-				guid, attempt, WAL_RETRY_COUNT));
-			if (attempt < WAL_RETRY_COUNT) {
-				std::this_thread::sleep_for(std::chrono::milliseconds(WAL_RETRY_DELAY_MS * attempt));
-			}
-			continue;
-		}
-
-		if (!db.executeQuery(fmt::format("DELETE FROM `player_save_async_pending` WHERE `guid` = {}", guid))) {
-			LOG_ERROR(fmt::format("[SaveManager] Failed to clear old WAL entries for guid={} (attempt {}/{})",
-				guid, attempt, WAL_RETRY_COUNT));
-			transaction.rollback();
-			if (attempt < WAL_RETRY_COUNT) {
-				std::this_thread::sleep_for(std::chrono::milliseconds(WAL_RETRY_DELAY_MS * attempt));
-			}
-			continue;
-		}
-
-		bool insertOk = true;
-		for (size_t i = 0; i < save.queries.size(); ++i) {
-			const std::string escaped = db.escapeString(save.queries[i]);
-			if (!db.executeQuery(fmt::format(
-				"INSERT INTO `player_save_async_pending` (`guid`, `query_index`, `query_text`, `created_at`) "
-				"VALUES ({}, {}, {}, UNIX_TIMESTAMP())",
-				guid, i, escaped)))
-			{
-				LOG_ERROR(fmt::format("[SaveManager] Failed to insert WAL entry for guid={}, query_index={} (attempt {}/{})",
-					guid, i, attempt, WAL_RETRY_COUNT));
-				transaction.rollback();
-				insertOk = false;
-				break;
-			}
-		}
-
-		if (!insertOk) {
-			if (attempt < WAL_RETRY_COUNT) {
-				std::this_thread::sleep_for(std::chrono::milliseconds(WAL_RETRY_DELAY_MS * attempt));
-			}
-			continue;
-		}
-
-		if (!transaction.commit()) {
-			LOG_ERROR(fmt::format("[SaveManager] Failed to commit WAL transaction for guid={} (attempt {}/{})",
-				guid, attempt, WAL_RETRY_COUNT));
-			if (attempt < WAL_RETRY_COUNT) {
-				std::this_thread::sleep_for(std::chrono::milliseconds(WAL_RETRY_DELAY_MS * attempt));
-			}
-			continue;
-		}
-
-		return true;
+	DBTransaction transaction;
+	if (!transaction.begin()) {
+		LOG_ERROR(fmt::format("[SaveManager] Failed to begin WAL transaction for guid={}", guid));
+		return false;
 	}
 
-	LOG_ERROR(fmt::format("[SaveManager] WAL write failed for guid={} after {} attempts, save may be lost",
-		guid, WAL_RETRY_COUNT));
-	return false;
+	if (!db.executeQuery(fmt::format("DELETE FROM `player_save_async_pending` WHERE `guid` = {}", guid))) {
+		LOG_ERROR(fmt::format("[SaveManager] Failed to clear old WAL entries for guid={}", guid));
+		transaction.rollback();
+		return false;
+	}
+
+	for (size_t i = 0; i < save.queries.size(); ++i) {
+		const std::string escaped = db.escapeString(save.queries[i]);
+		if (!db.executeQuery(fmt::format(
+			"INSERT INTO `player_save_async_pending` (`guid`, `query_index`, `query_text`, `created_at`) "
+			"VALUES ({}, {}, {}, UNIX_TIMESTAMP())",
+			guid, i, escaped)))
+		{
+			LOG_ERROR(fmt::format("[SaveManager] Failed to insert WAL entry for guid={}, query_index={}", guid, i));
+			transaction.rollback();
+			return false;
+		}
+	}
+
+	if (!transaction.commit()) {
+		LOG_ERROR(fmt::format("[SaveManager] Failed to commit WAL transaction for guid={}", guid));
+		return false;
+	}
+
+	return true;
 }
 
 void SaveManager::deletePendingFlushFromDB(uint32_t guid)

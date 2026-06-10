@@ -208,14 +208,6 @@ local function setupTable()
     ]], STRESS_TABLE))
 end
 
-local function teardownTable(runId)
-    -- So limpa linhas do nosso run_id, nao dropa a tabela inteira (outro GM pode estar rodando)
-    if runId then
-        return db.query(string.format("DELETE FROM `%s` WHERE `run_id` = %d", STRESS_TABLE, runId))
-    end
-    return true
-end
-
 -- ============================================================================
 -- PHASE 1 - INSERT flood + db.escapeString + LAST_INSERT_ID
 -- ============================================================================
@@ -1638,6 +1630,7 @@ function stressTalkAction.onSay(player, words, param)
         ))
 
         if not setupTable() then
+            activeRuns[player:getGuid()] = false
             logFail(player, "Falha ao criar tabela de stress. Abortando.")
             return false
         end
@@ -1721,5 +1714,4 @@ function stressTalkAction.onSay(player, words, param)
 end
 
 stressTalkAction:accountType(6)
-stressTalkAction:access(true)
 stressTalkAction:register()
