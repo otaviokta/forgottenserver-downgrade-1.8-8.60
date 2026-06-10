@@ -190,47 +190,13 @@ local function readStatusVar(varName)
     return v
 end
 
--- Marca uma fase assincrona como completa e dispara o summary se todas terminaram.
+-- Marca uma fase assincrona como completa. Quando todas terminam, agenda tryFinalizeAsyncSettle.
 local function completeAsyncPhase(guid, phase, ok)
     if not asyncResults[guid] or not asyncPending[guid] then return end
     asyncResults[guid][phase] = ok
     asyncPending[guid] = asyncPending[guid] - 1
     if asyncPending[guid] <= 0 and settleData[guid] then
-        local sd = settleData[guid]
-        settleData[guid] = nil
-        addEvent(function()
-            local p = safePlayer(sd.pid, sd.guid)
-            if not p then
-                activeRuns[sd.guid] = false
-                asyncResults[sd.guid] = nil
-                asyncPending[sd.guid] = nil
-                return
-            end
-            sd.results[6] = runPhase6(p, sd.runId)
-            local ar = asyncResults[sd.guid] or {}
-            local total, passed = 0, 0
-            for i = 1, 5 do
-                total = total + 1
-                if ar[i] ~= false then passed = passed + 1 end
-            end
-            for i = 6, 11 do
-                if sd.results[i] ~= nil then
-                    total = total + 1
-                    if sd.results[i] == true then passed = passed + 1 end
-                end
-            end
-            local wall = (os.clock() - sd.wallStart) * 1000
-            if passed == total then
-                print(COLOR_BLUE .. "[StressDB]" .. COLOR_GREEN .. "[INFO]" .. COLOR_RESET .. " " ..
-                      COLOR_BLUE .. string.format("=== STRESS COMPLETO: ALL PASS | wall ~%.0fms ===", wall) .. COLOR_RESET)
-                p:sendTextMessage(MSG_BLUE, string.format("[StressDB][PASS] === STRESS COMPLETO: ALL PASS | wall ~%.0fms ===", wall))
-            else
-                logFail(p, string.format("=== STRESS COMPLETO: %d/%d PASS | wall ~%.0fms - revise os FAILs! ===", passed, total, wall))
-            end
-            activeRuns[sd.guid] = false
-            asyncResults[sd.guid] = nil
-            asyncPending[sd.guid] = nil
-        end, 0)
+        addEvent(function(g) tryFinalizeAsyncSettle(g) end, 1, guid)
     end
 end
 
@@ -1598,6 +1564,46 @@ local function runPhase11(player, runId)
 end
 
 -- ============================================================================
+-- ASYNC SETTLE FINALIZER  (definido apos runPhase6, chamado via completeAsyncPhase)
+-- ============================================================================
+local function tryFinalizeAsyncSettle(guid)
+    local sd = settleData[guid]
+    if not sd then return end
+    settleData[guid] = nil
+    local p = safePlayer(sd.pid, sd.guid)
+    if not p then
+        activeRuns[sd.guid] = false
+        asyncResults[sd.guid] = nil
+        asyncPending[sd.guid] = nil
+        return
+    end
+    sd.results[6] = runPhase6(p, sd.runId)
+    local ar = asyncResults[sd.guid] or {}
+    local total, passed = 0, 0
+    for i = 1, 5 do
+        total = total + 1
+        if ar[i] ~= false then passed = passed + 1 end
+    end
+    for i = 6, 11 do
+        if sd.results[i] ~= nil then
+            total = total + 1
+            if sd.results[i] == true then passed = passed + 1 end
+        end
+    end
+    local wall = (os.clock() - sd.wallStart) * 1000
+    if passed == total then
+        print(COLOR_BLUE .. "[StressDB]" .. COLOR_GREEN .. "[INFO]" .. COLOR_RESET .. " " ..
+              COLOR_BLUE .. string.format("=== STRESS COMPLETO: ALL PASS | wall ~%.0fms ===", wall) .. COLOR_RESET)
+        p:sendTextMessage(MSG_BLUE, string.format("[StressDB][PASS] === STRESS COMPLETO: ALL PASS | wall ~%.0fms ===", wall))
+    else
+        logFail(p, string.format("=== STRESS COMPLETO: %d/%d PASS | wall ~%.0fms - revise os FAILs! ===", passed, total, wall))
+    end
+    activeRuns[sd.guid] = false
+    asyncResults[sd.guid] = nil
+    asyncPending[sd.guid] = nil
+end
+
+-- ============================================================================
 -- REVSCRIPT - TalkAction
 -- ============================================================================
 local stressTalkAction = TalkAction("/stress_db")
@@ -1754,9 +1760,6 @@ function stressTalkAction.onSay(player, words, param)
         addEvent(function(g)
             if settleData[g] and asyncPending[g] and asyncPending[g] > 0 then
                 asyncPending[g] = 0
-                local sd = settleData[g]
-                settleData[g] = nil
-                -- Fases restantes marcadas como fail por timeout
                 if asyncResults[g] then
                     for ph = 1, 5 do
                         if asyncResults[g][ph] == nil then
@@ -1764,34 +1767,14 @@ function stressTalkAction.onSay(player, words, param)
                         end
                     end
                 end
+                local sd = settleData[g]
                 if sd then
                     local p = safePlayer(sd.pid, sd.guid)
                     if p then
                         logFail(p, "Timeout: algumas fases assincronas nao completaram. Summary forcado.")
                     end
-                    sd.results[6] = runPhase6(p or player, sd.runId)
-                    local ar = asyncResults[g] or {}
-                    local _total, _passed = 0, 0
-                    for i = 1, 5 do
-                        _total = _total + 1
-                        if ar[i] ~= false then _passed = _passed + 1 end
-                    end
-                    for i = 6, 11 do
-                        if sd.results[i] ~= nil then
-                            _total = _total + 1
-                            if sd.results[i] == true then _passed = _passed + 1 end
-                        end
-                    end
-                    if p then
-                        local _wall = (os.clock() - sd.wallStart) * 1000
-                        if _passed == _total then
-                            p:sendTextMessage(MSG_BLUE, string.format("[StressDB][PASS] === STRESS COMPLETO: ALL PASS | wall ~%.0fms ===", _wall))
-                        else
-                            logFail(p, string.format("=== STRESS COMPLETO: %d/%d PASS | wall ~%.0fms (timeout parcial) ===", _passed, _total, _wall))
-                        end
-                    end
-                    activeRuns[g] = false
                 end
+                tryFinalizeAsyncSettle(g)
             end
             asyncResults[g] = nil
             asyncPending[g] = nil
