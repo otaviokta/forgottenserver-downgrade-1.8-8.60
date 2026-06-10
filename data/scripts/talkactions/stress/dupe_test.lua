@@ -48,8 +48,8 @@
 -- ============================================================================
 -- Itens de teste - use IDs que nao interfiram com inventario real.
 -- Se o servidor tiver itens QA/debug, defina QA_ITEM_NS e QA_ITEM_ST abaixo.
-local QA_ITEM_NS = 2376   -- Sword (cheap non-stackable, safe for QA cleanup)
-local QA_ITEM_ST = 2152   -- Platinum Coin (low-value stackable, safe for QA cleanup)
+local QA_ITEM_NS = 3264   -- Sword (cheap non-stackable, safe for QA cleanup)
+local QA_ITEM_ST = 3035   -- Platinum Coin (low-value stackable, safe for QA cleanup)
 
 -- Seguranca: rejeita IDs de producao de alto valor (Fire Sword=3280, Gold Coin=3031)
 if QA_ITEM_NS == 3280 or QA_ITEM_NS == 3031 or QA_ITEM_ST == 3280 or QA_ITEM_ST == 3031 then
