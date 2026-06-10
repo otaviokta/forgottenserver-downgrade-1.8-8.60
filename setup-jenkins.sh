@@ -9,12 +9,17 @@ NC='\033[0m'
 echo -e "${CYAN}=== Instalando Jenkins ===${NC}"
 
 sudo apt update
-sudo apt install -y fontconfig openjdk-17-jre
+sudo apt install -y fontconfig openjdk-21-jre
 
 sudo mkdir -p /etc/apt/keyrings
-wget -O- https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | \
-    sudo gpg --dearmor -o /etc/apt/keyrings/jenkins.gpg
+sudo rm -f /etc/apt/keyrings/jenkins.gpg
+
+sudo GNUPGHOME=/root/.gnupg gpg --no-default-keyring \
+    --keyring /etc/apt/keyrings/jenkins.gpg \
+    --keyserver keyserver.ubuntu.com --recv-keys 7198F4B714ABFC68
 sudo chmod a+r /etc/apt/keyrings/jenkins.gpg
+
+sudo rm -f /etc/apt/sources.list.d/jenkins.list
 echo "deb [signed-by=/etc/apt/keyrings/jenkins.gpg] https://pkg.jenkins.io/debian-stable binary/" | \
     sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
 
